@@ -38,10 +38,9 @@ end
 
 class HTTP_Session
 
-  SOMEURI = URI("")
-
   def initialize(uri, accesskey=nil)
-    @uri = SOMEURI.coerce(uri)[0]
+    # Force string or URI to be a URI - tried coerce, didn't work
+    @uri = URI(uri.to_s)
     @key = accesskey
     @http = Net::HTTP.new(@uri.host, @uri.port)
   end
@@ -58,7 +57,7 @@ class HTTP_Session
     if value
       msg += " (#{value})"
     end
-    raise HTTPSessionError("HTTPSessionError on #{@uri} #{msg}")
+    raise HTTPSessionError.new("HTTPSessionError on #{@uri} #{msg}")
   end
 
   def splitValues(txt, sep=",", lq=%q('"<), rq=%q('">))
@@ -129,69 +128,9 @@ class HTTP_Session
     return links
   end
 
-  def doRequestGet(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    resp = @http.get(getRequestPath(uripath), getRequestHeaders(options))
-    return [Integer(resp.code), resp.message, resp, resp.body]
-  end
-
-  def doRequestPut(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    resp = @http.put(getRequestPath(uripath), getRequestHeaders(options))
-    return [Integer(resp.code), resp.message, resp, resp.body]
-  end
-
-  def doRequestPost(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    resp = @http.post(getRequestPath(uripath), getRequestHeaders(options))
-    return [Integer(resp.code), resp.message, resp, resp.body]
-  end
-
-  def doRequestDelete(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    resp = @http.delete(getRequestPath(uripath), getRequestHeaders(options))
-    return [Integer(resp.code), resp.message, resp, resp.body]
-  end
-
-  def doRequest(method, uripath, options)
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    if method == 'GET'
-      return self.doRequestGet(uripath, options)
-    elsif method == 'PUT'
-      return self.doRequestPut(uripath, options)
-    elsif method == 'POST'
-      return self.doRequestPost(uripath, options)
-    elsif method == 'DELETE'
-      return self.doRequestDelete(uripath, options)
-    else
-      error("Unrecognized method #{method}")
-    end
-  end
-
-  def doRequestFollowRedirect(method, uripath, options)
-    # Perform HTTP request, following 302, 303 307 redirects
-    # Return [status, reason(text), response headers, final uri, response body]
-    status, reason, headers, data = doRequest(method, uripath, options)
-    if [302,303,307].include?(status)
-      uripath = headers["location"]
-      status, reason, headers, data = doRequest(method, uripath, options)
-    end
-    if [302,307].include?(status)
-      # Allow second temporary redirect
-      uripath = headers["location"]
-      status, reason, headers, data = doRequest(method, uripath, options)
-    end
-    return [status, reason, headers, URI(uripath), data]
-  end
-
   def getRequestPath(uripath)
     # Extract path (incl query) for HTTP request
-    uripath = SOMEURI.coerce(uripath)[0]
+    uripath = URI(uripath.to_s)
     if uripath.scheme and (uripath.scheme != @uri.scheme)
       error("Request URI scheme does not match session: #{uripath}")
     end
@@ -221,7 +160,98 @@ class HTTP_Session
     if options[:accept]
       reqheaders['accept'] = options[:accept]
     end
+    reqheaders.each { |k,v| puts "- reqheader[#{k}] = #{v}" }
     return reqheaders
+  end
+
+  def doRequestGet(uripath, options={})
+    # Perform HTTP request
+    # Return [status, reason(text), response headers, response body]
+    #resp = @http.get(getRequestPath(uripath), getRequestHeaders(options))
+    req = Net::HTTP::Get.new(getRequestPath(uripath))
+    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
+    resp = @http.request(req)
+    return [Integer(resp.code), resp.message, resp, resp.body]
+  end
+
+  def doRequestPut(uripath, options={})
+    # Perform HTTP request
+    # Return [status, reason(text), response headers, response body]
+    #resp = @http.put(getRequestPath(uripath), getRequestHeaders(options))
+    req = Net::HTTP::Put.new(getRequestPath(uripath))
+    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
+    resp = @http.request(req)
+    return [Integer(resp.code), resp.message, resp, resp.body]
+  end
+
+  def doRequestPost(uripath, options={})
+    # Perform HTTP request
+    # Return [status, reason(text), response headers, response body]
+    req = Net::HTTP::Post.new(getRequestPath(uripath))
+    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
+    resp = @http.request(req)
+    return [Integer(resp.code), resp.message, resp, resp.body]
+  end
+
+  def doRequestDelete(uripath, options={})
+    # Perform HTTP request
+    # Return [status, reason(text), response headers, response body]
+    #resp = @http.delete(getRequestPath(uripath), getRequestHeaders(options))
+    req = Net::HTTP::Delete.new(getRequestPath(uripath))
+    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
+    resp = @http.request(req)
+    return [Integer(resp.code), resp.message, resp, resp.body]
+  end
+
+  def doRequest(method, uripath, options)
+    # Perform HTTP request
+    # Return [status, reason(text), response headers, response body]
+    #
+    # @@TODO - refactor so that request objects are built separately, 
+    #          and request headers added by common code
+    debug = true
+    if debug
+      puts "doRequest #{method} #{uripath}"
+      options.each { |k,v| puts "- option[#{k}] = #{v}" }
+      if options[:headers]
+        options[:headers].each { |k,v| puts "- request header[#{k}] = #{v}", v }
+      end
+    end
+    if method == 'GET'
+      c,r,h,b = doRequestGet(uripath, options)
+    elsif method == 'PUT'
+      c,r,h,b = doRequestPut(uripath, options)
+    elsif method == 'POST'
+      c,r,h,b = doRequestPost(uripath, options)
+    elsif method == 'DELETE'
+      c,r,h,b = doRequestDelete(uripath, options)
+    else
+      error("Unrecognized method #{method}")
+    end
+    if debug
+      puts "doRequest #{c} #{r}"
+      h.each { |k,v| puts "- response header[#{k}] = #{v}" }
+      puts "- response body"
+      puts b
+      puts "----"
+    end
+    return [c,r,h,b]    
+  end
+
+  def doRequestFollowRedirect(method, uripath, options)
+    # Perform HTTP request, following 302, 303 307 redirects
+    # Return [status, reason(text), response headers, final uri, response body]
+    status, reason, headers, data = doRequest(method, uripath, options)
+    if [302,303,307].include?(status)
+      uripath = headers["location"]
+      status, reason, headers, data = doRequest(method, uripath, options)
+    end
+    if [302,307].include?(status)
+      # Allow second temporary redirect
+      uripath = headers["location"]
+      status, reason, headers, data = doRequest(method, uripath, options)
+    end
+    return [status, reason, headers, URI(uripath), data]
   end
 
   def aggregateResourceInt(rouri, respath=nil, options={})
@@ -236,7 +266,13 @@ class HTTP_Session
     # Return (status, reason, proxyuri, resuri), where status is 200 or 201
     #
     # POST (empty) proxy value to RO ...
-    reqheaders = respath and { "slug" => respath }
+    reqheaders = options[:headers]
+    if not reqheaders
+      reqheaders = {}
+    end
+    if respath
+      reqheaders['slug'] = respath 
+    end
     proxydata = %q(
       <rdf:RDF
         xmlns:ore="http://www.openarchives.org/ore/terms/"
@@ -246,20 +282,22 @@ class HTTP_Session
       </rdf:RDF>
       )
     status, reason, headers, data = doRequest("POST", rouri,
-      :ctype      => "application/vnd.wf4ever.proxy",
-      :reqheaders => reqheaders, 
-      :body       => proxydata)
+      :ctype    => "application/vnd.wf4ever.proxy",
+      :headers  => reqheaders, 
+      :body     => proxydata)
     if status != 201
       error("Error creating aggregation proxy",
             "#{status} #{reason} #{respath}")
     end
     proxyuri = URI(headers["location"])
+    # headers.each {|h,v| puts "h #{h} = #{v}"}
     links    = parseLinks(headers)
-    if not links.include?(ORE[:proxyFor])
+    # links.each {|r,u| puts "r #{r} -> u #{u.to_s}"}
+    resuri = links[ORE[:proxyFor].to_s]
+    if not resuri
       error("No ore:proxyFor link in create proxy response",
             "Proxy URI #{proxyuri}")
     end
-    resuri   = URI(links[str(ORE[:proxyFor])])
     # PUT resource content to indicated URI
     status, reason, headers, data = doRequest("PUT", resuri, options)
     if not [200,201].include?(status)
@@ -431,7 +469,7 @@ class TestHTTP_Session < Test::Unit::TestCase
     assert_equal(URI('http://example.org/fas;far'), s.parseLinks(links)['http://example.org/rel/fas'])
   end
 
-  def zztest_HTTP_Simple_Get
+  def test_HTTP_Simple_Get
     s = HTTP_Session.new(Test_rodl)
     c,r,h,b = s.doRequest("GET", Test_ro, 
       {:accept => "application/rdf+xml"})
@@ -441,7 +479,7 @@ class TestHTTP_Session < Test::Unit::TestCase
     assert_equal("", b)
   end
 
-  def zztest_HTTP_Redirected_Get
+  def test_HTTP_Redirected_Get
     s = HTTP_Session.new(Test_rodl)
     c,r,h,u,b = s.doRequestFollowRedirect("GET", Test_ro,
       {:accept => "application/rdf+xml"})
@@ -459,9 +497,10 @@ class TestHTTP_Session < Test::Unit::TestCase
     c, r, puri, ruri = s.aggregateResourceInt(Test_ro, "test_aggregateResourceInt", options)
     assert_equal(200, c)
     assert_equal("OK", r)
-    assert_equal("application/rdf+xml", h["content-type"])
-    assert_equal(Test_ro+".ro/manifest.rdf", puri.to_s)
-    assert_equal(Test_ro+".ro/manifest.rdf", ruri.to_s)
+    puri_exp = Test_ro+".ro/proxies/"
+    puri_act = puri.to_s.slice(0...puri_exp.length)
+    assert_equal(puri_exp, puri_act)
+    assert_equal(Test_ro+"test_aggregateResourceInt", ruri.to_s)
   end
 
  end
