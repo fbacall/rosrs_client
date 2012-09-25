@@ -2,6 +2,36 @@
 
 require 'net/http'
 
+# ----------
+# Namespaces
+# ----------
+
+# @@TODO: move this to separate module, and define all common namespaces
+
+class Namespace
+  def initialize(prefix, base, memberlist)
+    @prefix   = prefix
+    @base_uri = URI(base)
+    @members  = {}
+    memberlist.each do |m|
+      @members[m.to_sym] = URI(@base_uri.to_s+m)
+    end
+  end
+  
+  def [](name)
+    return @members[name]
+  end
+    
+end
+
+ORE = Namespace.new("ORE", "http://www.openarchives.org/ore/terms/",
+        [ "Aggregation", "AggregatedResource", "Proxy", 
+          "aggregates", "proxyFor", "proxyIn", "isDescribedBy"
+        ])
+
+# ----------
+
+
 class HTTPSessionError < Exception
   # Exception class used to signal HTTP Session errors
 end
@@ -24,9 +54,79 @@ class HTTP_Session
   end
 
   def error(msg, value=Nil)
+    # Raise exception with supplied message and optional value
     if value
       msg += " (#{value})"
-      raise HTTPSessionError msg=msg, value=value, @uri)
+    end
+    raise HTTPSessionError("HTTPSessionError on #{@uri} #{msg}")
+  end
+
+  def splitValues(txt, sep=",", lq=%q('"<), rq=%q('">))
+    # Helper function returns list of delimited values in a string,
+    # where delimiters in quotes are protected.
+    # 
+    # sep is string of separator
+    # lq is string of opening quotes for strings within which separators are not recognized
+    # rq is string of corresponding closing quotes
+    result = []
+    cursor = 0
+    begseg = cursor
+    while cursor < txt.length do
+      if lq.include?(txt[cursor])
+        # Skip quoted or bracketed string
+        eq = rq[lq.index(txt[cursor])]  # End quote/bracket character
+        cursor += 1
+        while cursor < txt.length and txt[cursor] != eq do
+          if txt[cursor].chr == '\\'
+            cursor += 1 # skip '\' quoted-pair
+          end
+          cursor += 1
+        end
+        if cursor < txt.length
+          cursor += 1 # Skip closing quote/bracket
+        end
+      elsif sep.include?(txt[cursor])
+        result << txt.slice(begseg...cursor)
+        cursor += 1
+        begseg = cursor
+      else
+        cursor += 1
+      end
+    end
+    # append final segment
+    result << txt.slice(begseg...cursor)
+    return result
+  end
+
+  def parseLinks(headerlist)
+    # Parse links from headers; returns a hash indexed by link relation
+    # Headerlist is a hash indexed by header field name (see HTTP:Response)
+    links = {}
+    headerlist.each do |h,v|
+      #puts "h #{h} = #{v}"
+      if h.downcase == "link"
+        #puts "v #{v}"
+        splitValues(v, ",").each do |linkval|
+          #puts "linkval #{linkval}"
+          linkparts = splitValues(linkval, ";")
+          linkmatch = /\s*<([^>]*)>\s*/.match(linkparts[0])
+          if linkmatch
+            linkuri = linkmatch[1]
+            #puts "linkuri #{linkuri}"
+            linkparts.slice(1..-1).each do |linkparam|
+              #puts "linkparam #{linkparam}"
+              parammatch = /\s*rel\s*=\s*"?(.*?)"?\s*$/.match(linkparam)
+              if parammatch
+                linkrel = parammatch[1]
+                #puts "linkrel #{linkrel}"
+                links[linkrel] = URI(linkuri)
+              end
+            end
+          end
+        end
+      end
+    end
+    return links
   end
 
   def doRequestGet(uripath, options={})
@@ -65,11 +165,11 @@ class HTTP_Session
     elsif method == 'PUT'
       return self.doRequestPut(uripath, options)
     elsif method == 'POST'
-      return self.doRequesPost(uripath, options)
+      return self.doRequestPost(uripath, options)
     elsif method == 'DELETE'
       return self.doRequestDelete(uripath, options)
     else
-      raise HTTPSessionError, "Unrecognized method #{method}"
+      error("Unrecognized method #{method}")
     end
   end
 
@@ -86,8 +186,6 @@ class HTTP_Session
       uripath = headers["location"]
       status, reason, headers, data = doRequest(method, uripath, options)
     end
-    puts "Data "+data
-    puts "Status "+status.to_s+", Path "+uripath
     return [status, reason, headers, URI(uripath), data]
   end
 
@@ -95,11 +193,11 @@ class HTTP_Session
     # Extract path (incl query) for HTTP request
     uripath = SOMEURI.coerce(uripath)[0]
     if uripath.scheme and (uripath.scheme != @uri.scheme)
-      raise HTTPSessionError, "Request URI scheme does not match session: #{uripath}"
+      error("Request URI scheme does not match session: #{uripath}")
     end
     if (uripath.host and uripath.host != @uri.host) or
        (uripath.port and uripath.port != @uri.port)
-      raise HTTPSessionError, "Request URI host or port does not match session: #{uripath}"
+      error("Request URI host or port does not match session: #{uripath}")
     end
     requri = URI.join(@uri.to_s, uripath.path).path
     if uripath.query
@@ -126,12 +224,19 @@ class HTTP_Session
     return reqheaders
   end
 
-  def aggregateResourceInt(rouri, respath=nil, options)
+  def aggregateResourceInt(rouri, respath=nil, options={})
     # Aggegate internal resource
+    #
+    # options: { 
+    #   body    => body to accompany request
+    #   ctype   => content type of supplied body
+    #   accept  => accept co ntent types for response 
+    #   headers => additional headers for request
+    #   }
     # Return (status, reason, proxyuri, resuri), where status is 200 or 201
     #
     # POST (empty) proxy value to RO ...
-    reqheaders = respath and { "slug": respath }
+    reqheaders = respath and { "slug" => respath }
     proxydata = %q(
       <rdf:RDF
         xmlns:ore="http://www.openarchives.org/ore/terms/"
@@ -141,28 +246,27 @@ class HTTP_Session
       </rdf:RDF>
       )
     status, reason, headers, data = doRequest("POST", rouri,
-      ctype=>"application/vnd.wf4ever.proxy",
-      reqheaders=>reqheaders, 
-      body=>proxydata)
+      :ctype      => "application/vnd.wf4ever.proxy",
+      :reqheaders => reqheaders, 
+      :body       => proxydata)
     if status != 201
-      raise self.error("Error creating aggregation proxy",
-                      "#{status} #{reason} #{respath}")
+      error("Error creating aggregation proxy",
+            "#{status} #{reason} #{respath}")
     end
-    proxyuri = rdflib.URIRef(headers["location"])
-    links    = self.parseLinks(headers)
-    log.debug("- links: "+repr(links))
-    log.debug("- ORE.proxyFor: "+str(ORE.proxyFor))
-    if str(ORE.proxyFor) not in links:
-        raise self.error("No ore:proxyFor link in create proxy response",
-                        "Proxy URI %s"%str(proxyuri))
-    resuri   = rdflib.URIRef(links[str(ORE.proxyFor)])
+    proxyuri = URI(headers["location"])
+    links    = parseLinks(headers)
+    if not links.include?(ORE[:proxyFor])
+      error("No ore:proxyFor link in create proxy response",
+            "Proxy URI #{proxyuri}")
+    end
+    resuri   = URI(links[str(ORE[:proxyFor])])
     # PUT resource content to indicated URI
-    (status, reason, headers, data) = self.doRequest(resuri,
-        method="PUT", ctype=ctype, body=body)
-    if status not in [200,201]:
-        raise self.error("Error creating aggregated resource content",
-            "%03d %s (%s)"%(status, reason, respath))
-    return (status, reason, proxyuri, resuri)
+    status, reason, headers, data = doRequest("PUT", resuri, options)
+    if not [200,201].include?(status)
+        error("Error creating aggregated resource content",
+              "#{status}, #{reason}, #{respath}")
+    end
+    return [status, reason, proxyuri, resuri]
   end
 
   def createROAnnotationBody(rouri, anngr)
@@ -170,12 +274,14 @@ class HTTP_Session
     # 
     # Returns: (status, reason, bodyuri)
     (status, reason, bodyproxyuri, bodyuri) = self.aggregateResourceInt(rouri,
-        ctype="application/rdf+xml",
-        body=anngr.serialize(format="xml"))
+      ctype="application/rdf+xml",
+      body=anngr.serialize(format="xml"))
     if status != 201:
-        raise self.error("Error creating annotation body resource",
-            "%03d %s (%s)"%(status, reason, str(resuri)))
-    return (status, reason, bodyuri)
+      raise self.error("Error creating annotation body resource",
+                       "#{status}, #{reason}, #{str(resuri)}")
+    end
+    return [status, reason, bodyuri]
+  end
 
   # def createROAnnotationStub(self, rouri, resuri, bodyuri):
   #     """
@@ -262,16 +368,103 @@ class HTTP_Session
 end
 
 
-s = HTTP_Session.new("http://sandbox.wf4ever-project.org/rodl/ROs/")
-c,r,h,u,b = s.doRequestFollowRedirect("GET", 
-  "http://sandbox.wf4ever-project.org/rodl/ROs/InterProScan_RO2/", 
-  {:accept => "application/rdf+xml"})
-puts c
-puts r
-h.each { |hdr,val| puts hdr+"="+val }
-puts u
-puts '---'
-puts b
-puts '---'
+# s = HTTP_Session.new("http://sandbox.wf4ever-project.org/rodl/ROs/")
+# c,r,h,u,b = s.doRequestFollowRedirect("GET", 
+#   "http://sandbox.wf4ever-project.org/rodl/ROs/InterProScan_RO2/", 
+#   {:accept => "application/rdf+xml"})
+# puts c
+# puts r
+# h.each { |hdr,val| puts hdr+"="+val }
+# puts u
+# puts '---'
+# puts b
+# puts '---'
+
+# @@TODO: move tests to separae module
+# @@TODO: create separate module for test configuration (RODL, etc)
+
+require "test/unit"
+
+class TestHTTP_Session < Test::Unit::TestCase
+
+  Test_rodl = "http://sandbox.wf4ever-project.org/rodl/ROs/"
+  Test_ro   = Test_rodl+"workflow2470/"
+
+  def test_Namespace_ORE
+    assert_equal(URI("http://www.openarchives.org/ore/terms/Aggregation"),
+                 ORE[:Aggregation]
+                 )
+  end
+
+  def testSplitValues
+    s = HTTP_Session.new(Test_rodl)
+    assert_equal(['a','b','c'],
+                 s.splitValues("a,b,c"))
+    assert_equal(['a','"b,c"','d'],
+                 s.splitValues('a,"b,c",d'))
+    assert_equal(['a',' "b, c\\", c1"',' d'],
+                 s.splitValues('a, "b, c\\", c1", d'))
+    assert_equal(['a,"b,c",d'],
+                 s.splitValues('a,"b,c",d', ";"))
+    assert_equal(['a','"b;c"','d'],
+                 s.splitValues('a;"b;c";d', ";"))
+    assert_equal(['a','<b;c>','d'],
+                 s.splitValues('a;<b;c>;d', ";"))
+    assert_equal(['"a;b"','(c;d)','e'],
+                 s.splitValues('"a;b";(c;d);e', ";", '"(', '")'))
+  end
+
+  def test_ParseLinks
+    s = HTTP_Session.new(Test_rodl)
+    links = [ ['Link', '<http://example.org/foo>; rel=foo'],
+              ['Link', ' <http://example.org/bar> ; rel = bar '],
+              ['Link', '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'],
+              ['Link', ' <http://example.org/fie> ; par = fie '],
+              ['Link', ' <http://example.org/fum> ; rel = "http://example.org/rel/fum" '],
+              ['Link', ' <http://example.org/fas;far> ; rel = "http://example.org/rel/fas" '],
+            ]
+    assert_equal(URI('http://example.org/foo'), s.parseLinks(links)['foo'])
+    assert_equal(URI('http://example.org/bar'), s.parseLinks(links)['bar'])
+    assert_equal(URI('http://example.org/bas'), s.parseLinks(links)['bas'])
+    assert_equal(URI('http://example.org/bat'), s.parseLinks(links)['bat'])
+    assert_equal(URI('http://example.org/fum'), s.parseLinks(links)['http://example.org/rel/fum'])
+    assert_equal(URI('http://example.org/fas;far'), s.parseLinks(links)['http://example.org/rel/fas'])
+  end
+
+  def zztest_HTTP_Simple_Get
+    s = HTTP_Session.new(Test_rodl)
+    c,r,h,b = s.doRequest("GET", Test_ro, 
+      {:accept => "application/rdf+xml"})
+    assert_equal(303, c)
+    assert_equal("See Other", r)
+    assert_equal("application/rdf+xml", h["content-type"])
+    assert_equal("", b)
+  end
+
+  def zztest_HTTP_Redirected_Get
+    s = HTTP_Session.new(Test_rodl)
+    c,r,h,u,b = s.doRequestFollowRedirect("GET", Test_ro,
+      {:accept => "application/rdf+xml"})
+    assert_equal(200, c)
+    assert_equal("OK", r)
+    assert_equal("application/rdf+xml", h["content-type"])
+    assert_equal(Test_ro+".ro/manifest.rdf", u.to_s)
+    #assert_match(???, b)
+  end
+
+  def test_aggregateResourceInt
+    s = HTTP_Session.new(Test_rodl)
+    body    = "test_aggregateResourceInt resource body\n"
+    options = { :body => body, :ctype => "text/plain" }
+    c, r, puri, ruri = s.aggregateResourceInt(Test_ro, "test_aggregateResourceInt", options)
+    assert_equal(200, c)
+    assert_equal("OK", r)
+    assert_equal("application/rdf+xml", h["content-type"])
+    assert_equal(Test_ro+".ro/manifest.rdf", puri.to_s)
+    assert_equal(Test_ro+".ro/manifest.rdf", ruri.to_s)
+  end
+
+ end
+
 
 
