@@ -160,7 +160,7 @@ class HTTP_Session
     if options[:accept]
       reqheaders['accept'] = options[:accept]
     end
-    reqheaders.each { |k,v| puts "- reqheader[#{k}] = #{v}" }
+    #reqheaders.each { |k,v| puts "- reqheader[#{k}] = #{v}" }
     return reqheaders
   end
 
@@ -205,11 +205,18 @@ class HTTP_Session
 
   def doRequest(method, uripath, options)
     # Perform HTTP request
+    #
+    # options: { 
+    #   body    => body to accompany request
+    #   ctype   => content type of supplied body
+    #   accept  => accept co ntent types for response 
+    #   headers => additional headers for request
+    #   }
     # Return [status, reason(text), response headers, response body]
     #
     # @@TODO - refactor so that request objects are built separately, 
     #          and request headers added by common code
-    debug = true
+    debug = false
     if debug
       puts "doRequest #{method} #{uripath}"
       options.each { |k,v| puts "- option[#{k}] = #{v}" }
@@ -507,3 +514,8 @@ class TestHTTP_Session < Test::Unit::TestCase
 
 
 
+
+require 'rdf'
+require 'rdf/raptor'
+
+graph = RTDF::Graph.load(filena
