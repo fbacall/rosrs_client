@@ -1,42 +1,72 @@
-# HTTP session class
+# ROSRS session class
 
 require 'net/http'
+require 'logger'
+require 'json'
 
 require 'rubygems'
 require 'rdf'
 require 'rdf/raptor'
 
-require './Namespaces'
+require './namespaces'
+require './rdf_graph'
 
-# ----------
+# Set up logger for this module
+# @@TODO connect to multi-module logging framework (log4r?)
 
-class HTTPSessionError < Exception
+if not defined?($log)
+  loglevel = nil
+  loglevel = Logger::DEBUG
+  #loglevel = Logger::INFO
+  #loglevel = Logger::WARN
+  #loglevel = Logger::ERROR
+  $log = Logger.new(STDOUT)
+  #log = logger.new(__FILE__+".log")
+  $log.progname = "rosrs_session"
+  $log.level = Logger::ERROR
+  if loglevel
+    $log.level = loglevel
+  end
+end
+
+class ROSRS_Session_Error < Exception
   # Exception class used to signal HTTP Session errors
 end
 
-class HTTP_Session
+class ROSRS_Session
+
+  # -------------
+  # General setup
+  # -------------
+
+  attr_reader :log
 
   def initialize(uri, accesskey=nil)
     # Force string or URI to be a URI - tried coerce, didn't work
     @uri = URI(uri.to_s)
     @key = accesskey
     @http = Net::HTTP.new(@uri.host, @uri.port)
+    @log  = $log
   end
 
   def close
-    if @http
+    if @http and @http.started?
       @http.finish
       @http = nil
     end
   end
 
-  def error(msg, value=Nil)
+  def error(msg, value=nil)
     # Raise exception with supplied message and optional value
     if value
       msg += " (#{value})"
     end
-    raise HTTPSessionError.new("HTTPSessionError on #{@uri} #{msg}")
+    raise ROSRS_Session_Error.new("ROSRS_Session_Error on #{@uri} #{msg}")
   end
+
+  # -------
+  # Helpers
+  # -------
 
   def splitValues(txt, sep=",", lq=%q('"<), rq=%q('">))
     # Helper function returns list of delimited values in a string,
@@ -138,47 +168,8 @@ class HTTP_Session
     if options[:accept]
       reqheaders['accept'] = options[:accept]
     end
-    #reqheaders.each { |k,v| puts "- reqheader[#{k}] = #{v}" }
+    reqheaders.each { |k,v| log.debug("- reqheader[#{k}] = #{v}") }
     return reqheaders
-  end
-
-  def doRequestGet(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    #resp = @http.get(getRequestPath(uripath), getRequestHeaders(options))
-    req = Net::HTTP::Get.new(getRequestPath(uripath))
-    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
-    resp = @http.request(req)
-    return [Integer(resp.code), resp.message, resp, resp.body]
-  end
-
-  def doRequestPut(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    #resp = @http.put(getRequestPath(uripath), getRequestHeaders(options))
-    req = Net::HTTP::Put.new(getRequestPath(uripath))
-    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
-    resp = @http.request(req)
-    return [Integer(resp.code), resp.message, resp, resp.body]
-  end
-
-  def doRequestPost(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    req = Net::HTTP::Post.new(getRequestPath(uripath))
-    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
-    resp = @http.request(req)
-    return [Integer(resp.code), resp.message, resp, resp.body]
-  end
-
-  def doRequestDelete(uripath, options={})
-    # Perform HTTP request
-    # Return [status, reason(text), response headers, response body]
-    #resp = @http.delete(getRequestPath(uripath), getRequestHeaders(options))
-    req = Net::HTTP::Delete.new(getRequestPath(uripath))
-    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
-    resp = @http.request(req)
-    return [Integer(resp.code), resp.message, resp, resp.body]
   end
 
   def doRequest(method, uripath, options)
@@ -194,33 +185,34 @@ class HTTP_Session
     #
     # @@TODO - refactor so that request objects are built separately,
     #          and request headers added by common code
-    debug = true
-    if debug
-      puts "doRequest #{method} #{uripath}"
-      options.each { |k,v| puts "- option[#{k}] = #{v}" }
+    if log.debug?
+      log.debug { "ROSRS_session.doRequest #{method}, #{uripath}" }
+      options.each { |k,v| log.debug "- option[#{k}] = #{v}" }
       if options[:headers]
-        options[:headers].each { |k,v| puts "- request header[#{k}] = #{v}", v }
+        options[:headers].each { |k,v| log.debug "- request header[#{k}] = #{v}" }
       end
     end
     if method == 'GET'
-      c,r,h,b = doRequestGet(uripath, options)
+      req = Net::HTTP::Get.new(getRequestPath(uripath))
     elsif method == 'PUT'
-      c,r,h,b = doRequestPut(uripath, options)
+      req = Net::HTTP::Put.new(getRequestPath(uripath))
     elsif method == 'POST'
-      c,r,h,b = doRequestPost(uripath, options)
+      req = Net::HTTP::Post.new(getRequestPath(uripath))
     elsif method == 'DELETE'
-      c,r,h,b = doRequestDelete(uripath, options)
+      req = Net::HTTP::Delete.new(getRequestPath(uripath))
     else
-      error("Unrecognized method #{method}")
+      error("Unrecognized HTTP method #{method}")
     end
-    if debug
-      puts "doRequest #{c} #{r}"
-      h.each { |k,v| puts "- response header[#{k}] = #{v}" }
-      puts "- response body"
-      puts b
-      puts "----"
+    getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
+    resp = @http.request(req)
+    if log.debug?
+      log.debug "#{resp.code} #{resp.message}"
+      resp.each { |k,v| log.debug "- response header[#{k}] = #{v}" }
+      log.debug "- response body"
+      log.debug resp.body
+      log.debug "----"
     end
-    return [c,r,h,b]
+    return [Integer(resp.code), resp.message, resp, resp.body]
   end
 
   def doRequestFollowRedirect(method, uripath, options)
@@ -238,6 +230,75 @@ class HTTP_Session
     end
     return [status, reason, headers, URI(uripath), data]
   end
+
+  def doRequestRDF(method, uripath, options)
+    # Perform HTTP request expecting an RDF/XML response
+    # Return [status, reason(text), response headers, manifest graph]
+    # Returns the manifest as a graph if the request is successful
+    # otherwise returns the raw response data.
+    if not options
+      options = {}
+    end
+    options[:accept] = "application/rdf+xml"
+    c,r,h,d = doRequest(method, uripath, options)
+    if c >= 200 and c < 300
+      if h["content-type"].downcase == "application/rdf+xml"
+        begin
+          d = RDF_Graph.new(:data => d, :format => :xml)
+        rescue Exception => e
+          c = 902
+          r = "RDF parse failure (#{e.message})"
+        end
+      else
+        c = 901
+        r = "Non-RDF content-type returned (#{h["content-type"]})"
+      end
+    end
+    return [c, r, h, d]
+  end
+
+  # ---------------
+  # RO manipulation
+  # ---------------
+
+  def createRO(name, title, creator, date)
+    # Returns [copde, reason, uri, manifest]
+    reqheaders   = {
+        "slug"    => name
+        }
+    roinfo = {
+        "id"      => name,
+        "title"   => title,
+        "creator" => creator,
+        "date"    => date
+        }
+    roinfotext = roinfo.to_json
+    c, r, h, d = doRequestRDF("POST", "",
+      :body       => roinfotext,
+      :headers    => reqheaders)
+    log.debug("ROSRS_session.createRO: #{c} #{r} - #{d}")
+    if c == 201
+        return [c, r, h["location"], d]
+    end
+    if c == 409
+      return [c, r, nil, d]
+    end
+    error("Error creating RO: : #{c} #{r}")
+  end
+
+  def deleteRO(rouri)
+    #  status, reason = deleteRO(rouri)
+    c, r, h, d = doRequest("DELETE", rouri,
+        :accept => "application/rdf+xml")
+    if [204, 404].include?(c)
+      return [c, r]
+    end
+    error("Error deleting RO #{rouri}: #{c} #{r}")
+  end
+
+  # ---------------------
+  # Resource manipulation
+  # ---------------------
 
   def aggregateResourceInt(rouri, respath=nil, options={})
     # Aggegate internal resource
@@ -291,6 +352,10 @@ class HTTP_Session
     end
     return [status, reason, proxyuri, resuri]
   end
+
+  # -----------------------
+  # Annotation manipulation
+  # -----------------------
 
   def createROAnnotationBody(rouri, anngr)
     # Create an annotation body from a supplied annnotation graph.
