@@ -3,7 +3,7 @@ require 'rdf'
 require 'rdf/raptor'
 require 'rdf/ntriples'
 
-samplerdf = StringIO.new(%q(
+samplerdftxt = %q(
       <rdf:RDF
         xmlns:ore="http://www.openarchives.org/ore/terms/"
         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" >
@@ -11,7 +11,9 @@ samplerdf = StringIO.new(%q(
           <ore:foo rdf:resource="http://example.org.bar" />
         </ore:Proxy>
       </rdf:RDF>
-      ))
+      )
+
+samplerdf = StringIO.new(samplerdftxt)
 
 rdfreader = RDF::Reader.for(:rdfxml).new(samplerdf)
 
@@ -23,17 +25,23 @@ rdfreader = RDF::Reader.for(:rdfxml).new(samplerdf)
 
 #rdfgr << rdfreader
 
-rdfgr = RDF::Graph.new << RDF::Reader.for(:rdfxml).new(samplerdf)
+rdfgr = RDF::Graph.new << RDF::Reader.for(:rdfxml).new(samplerdftxt)
+
+#~ puts "<<<<"
+#~ rdfstr = RDF::Writer.for(:rdfxml).buffer do |writer|
+  #~ rdfgr.each_statement do |statement|
+    #~ writer << statement
+  #~ end
+#~ end
+#~ puts rdfstr
+#~ puts "<<<<"
 
 puts "<<<<"
 rdfstr = RDF::Writer.for(:rdfxml).buffer do |writer|
-  rdfgr.each_statement do |statement|
-    writer << statement
-  end
+    writer << rdfgr
 end
 puts rdfstr
 puts "<<<<"
-
 
 # RDF::Writer.for(:ntriples).buffer do |writer|
 #   graph.each_statement do |statement|
@@ -68,5 +76,5 @@ puts "<<<<"
 # end
 
 # puts writer.methods - Object.methods
-# 
+#
 # puts writer.serializer
