@@ -1,4 +1,5 @@
-require 'uri'
+require 'rubygems'
+require 'rdf'
 
 class Namespace
   def initialize(prefix, base, memberlist)
@@ -6,7 +7,7 @@ class Namespace
     @base_uri = URI(base)
     @members  = {}
     memberlist.each do |m|
-      @members[m.to_sym] = URI(@base_uri.to_s+m)
+      @members[m.to_sym] = RDF::URI(@base_uri.to_s+m)
       Namespace.send(:define_method, m) do
         return @members[m.to_sym]
       end

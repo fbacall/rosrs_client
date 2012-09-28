@@ -23,6 +23,9 @@ if not defined?($log)
   $log = Logger.new(STDOUT)
   #log = logger.new(__FILE__+".log")
   $log.progname = "rosrs_session"
+  $log.formatter = proc { |sev, dat, prg, msg|
+      "#{prg}: #{msg}\n"
+    }
   $log.level = Logger::ERROR
   if loglevel
     $log.level = loglevel

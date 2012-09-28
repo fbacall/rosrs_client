@@ -30,6 +30,14 @@ class RDF_Graph
 
   # other methods here
 
+  def has_statement?(stmt)
+    return @graph.has_statement?(stmt)
+  end
+
+  def each_statement(&block)
+    @graph.each_statement(&block)
+  end
+
   # Private helpers
 
   private

@@ -3,6 +3,30 @@
 require "test/unit"
 
 require "./rosrs_session"
+require "./namespaces"
+
+# Set up logger for this module
+# @@TODO connect to multi-module logging framework (log4r?)
+
+if not defined?($log)
+  loglevel = nil
+  loglevel = Logger::DEBUG
+  #loglevel = Logger::INFO
+  #loglevel = Logger::WARN
+  #loglevel = Logger::ERROR
+  $log = Logger.new(STDOUT)
+  #log = logger.new(__FILE__+".log")
+  $log.progname = "test_rosrs_session"
+  $log.level = Logger::ERROR
+  $log.formatter = proc { |sev, dat, prg, msg|
+      "#{prg}: #{msg}\n"
+    }
+  if loglevel
+    $log.level = loglevel
+  end
+end
+
+
 
 # Test configuration values - may be imported later
 class TestConfig
@@ -21,9 +45,12 @@ end
 
 class TestROSRS_Session < Test::Unit::TestCase
 
+  attr :log
+
   Config = TestConfig.new
 
   def setup
+    @log   = $log
     @rouri = nil
     @rosrs = ROSRS_Session.new(Config.rosrs_api_uri, Config.authorization)
   end
@@ -32,6 +59,25 @@ class TestROSRS_Session < Test::Unit::TestCase
     if @rosrs
       @rosrs.close
     end
+  end
+
+  def uri(str)
+    return RDF::URI(str)
+  end
+
+  def lit(str)
+    return RDF::Literal(str)
+  end
+
+  def stmt(triple)
+    s,p,o = triple
+    return RDF::Statement(:subject=>s,:predicate=>p,:object=>o)
+  end
+
+  def assert_contains(triple, graph)
+    #~ log.debug("assert_contains #{triple}")
+    #~ graph.each_statement { |stmt| log.debug("- #{stmt}") }
+    assert(graph.has_statement?(stmt(triple)), "Expected triple #{triple}")
   end
 
   def createTestRo
@@ -57,15 +103,20 @@ class TestROSRS_Session < Test::Unit::TestCase
                  )
   end
 
+  # ----------
+  # Test cases
+  # ----------
+
   def test_createTestRo
     c,r,u,m = createTestRo
     assert_equal(201, c)
     assert_equal("Created", r)
     assert_equal(Config.test_ro_uri, u)
-    assert_contains([Config.test_ro_uri,DCTERMS.title,Config.test_ro_name], m)
+    s = stmt([uri(Config.test_ro_uri), RDF.type, RO.ResearchObject])
+    assert_contains(s, m)
     c,r = deleteTestRo
     assert_equal(204, c)
-    assert_equal("N0 Content", r)
+    assert_equal("No Content", r)
   end
 
   def test_SplitValues
