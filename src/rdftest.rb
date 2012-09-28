@@ -13,29 +13,26 @@ samplerdf = StringIO.new(%q(
       </rdf:RDF>
       ))
 
-# graph = RDF::Reader.new(samplerdf) do |graph|
-#   graph.each_statement { |stmt| puts statement }
-# end
+rdfreader = RDF::Reader.for(:rdfxml).new(samplerdf)
 
-stmts = []
-graph = RDF::Reader.for(:rdfxml).new(samplerdf)
-puts graph.inspect
-graph.each_statement { |stmt| puts "---" ; puts stmt; stmts << stmt }
-puts "---"
+#~ rdfgr = RDF::Graph.new
+#~ graph.rewind
+#~ graph.each_statement do |statement|
+  #~ rdfgr << statement
+#~ end
 
-puts stmts.inspect
+#rdfgr << rdfreader
 
-#graph.rewind
+rdfgr = RDF::Graph.new << RDF::Reader.for(:rdfxml).new(samplerdf)
 
 puts "<<<<"
-RDF::Writer.for(:rdfxml).buffer do |writer|
-  stmts.each do |statement|
-    #writer << statement
-    puts statement.to_triple
+rdfstr = RDF::Writer.for(:rdfxml).buffer do |writer|
+  rdfgr.each_statement do |statement|
+    writer << statement
   end
 end
+puts rdfstr
 puts "<<<<"
-
 
 
 # RDF::Writer.for(:ntriples).buffer do |writer|
@@ -64,9 +61,7 @@ puts "<<<<"
 # puts "<<<<"
 # puts sio.string
 
-
 #writer = RDF::Writer.for(:rdfxml).buffer
-
 
 # graph.each_statement do |statement|
 #   writer << statement
