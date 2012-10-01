@@ -1,3 +1,7 @@
+# This is an experimental module for testing Ruby RDF parsing functions, 
+# and is not part of the package-provided functionality.  In due course, it should
+# be deleted.
+
 require 'rubygems'
 require 'rdf'
 require 'rdf/raptor'
