@@ -5,17 +5,17 @@ Partial port of Python ROSRS_Session code to Ruby.
 
 [This project [8]][ref8] is intended to provide a Ruby-callable API for [myExperiment [9]][ref9] to access [Research Objects [1]][ref1], [[2]][ref2] stored in RODL, using the [ROSRS API [3]][ref3].  The functions provided closely follow the ROSRS API specification.  The code is based on an implementation in Python used by the RO_Manager utility; a full implementat ROSRS test suite can be found in the [GitHub `wf4ever/ro-manager` project [7]][ref7].
 
-[ref1]: http://www.wf4ever-project.org/@@FIXME "(cf. @@ref wf4ever wiki - ROs)"
+[ref1]: http://www.wf4ever-project.org/wiki/pages/viewpage.action?pageId=2065079 "What is an RO?"
 
-[ref2]: http://github.org/@@FIXME "@@ref github RO model doc"
+[ref2]: http://wf4ever.github.com/ro/ "Wf4Ever Research Object Model"
 
-[ref3]: http://www.wf4ever-project.org/@@FIXME "wf4ever wiki ROSRS API (v6)"
+[ref3]: http://www.wf4ever-project.org/wiki/display/docs/RO+SRS+interface+6 "ROSRS interface (v6)"
 
-[ref7]: http://github.org/@@FIXME "Python ROSRS_Session in RO Manager"
+[ref7]: https://github.com/wf4ever/ro-manager/blob/master/src/rocommand/ROSRS_Session.py "Python ROSRS_Session in RO Manager.  See also test suite: https://github.com/wf4ever/ro-manager/blob/master/src/rocommand/test/TestROSRS_Session.py"
  
-[ref8]: http://github.org/@@FIXME "ruby-http-session project, or successor"
+[ref8]: https://github.com/gklyne/ruby-http-session "ruby-http-session project, or successor"
 
-[ref9]: http://myexperiment.org/@@FIXME "myExperiment"
+[ref9]: http://www.myexperiment.org/ "De Roure, D., Goble, C. and Stevens, R. (2009) The Design and Realisation of the myExperiment Virtual Research Environment for Social Sharing of Workflows. Future Generation Computer Systems 25, pp. 561-567. doi:10.1016/j.future.2008.06.010"
 
 
 ## Contents
@@ -45,11 +45,11 @@ The main functions provided by this package are in `rosrs_session`.  This module
 
 Module `rdf_graph` implements a simplified interface to the [Ruby RDF library [4]][ref4], handling parsing of RDF from strings, serialization to strings and simplified search and access to individual triples.  Most of the functions provided are quite trivial; the module is intended to provide (a) a distillation of knowledge about how to perform desired functions using the RDF and associated libraries, and (b) a shim layer for adapting between different conventions used by the RDF libraries and the `rosrs_session` library.  The [Raptor library [5]][ref5] and its [Ruby RDF interface[6]][ref6] are used for RDF/XML parsing and serialization.
 
-[ref4]: http://www.ruby-zzz.org/ "Ruby RDF library"
+[ref4]: http://rdf.rubyforge.org/ "RDF.rb: Linked Data for Ruby"
 
-[ref5]: http://raptor.zzz.org/ "Raptor library"
+[ref5]: http://librdf.org/raptor/ "Raptor RDF Syntax Library"
 
-[ref6]: http://www.ruby-zzz.org/ "Ruby RDF library interface to Raptor"
+[ref6]: http://rdf.rubyforge.org/raptor/ "Raptor RDF Parser Plugin for RDF.rb"
 
 Module `namespaces` provides definitions of URIs for namespaces and namespace terms used in RDF graphs.  These are in similar form to the namespaces provided by the RDF library, but recognized terms are predeclared to that spelling mistakes can be detected.
 
@@ -159,21 +159,22 @@ At the time of writing this, the code is very much a work in progress.  Some of 
 
 ## References
 
-[[1] Wf4Ever Research Object description and notes][ref1]
+[[1] _What is an RO?_][ref1]; Wf4Ever Research Object description and notes.
 
-[[2] Research Object model specification][ref2]
+[[2] _Wf4Ever Research Object Model_][ref2]; Specification of RO model.
 
-[[3] Wf4ever ROSRS API (v6)][ref3]
+[[3] _Wf4ever ROSRS interface (v6)_][ref3]; Description of the HTTP/REST interface for accessing and updating Research Objects, implemented by Wf4Ever RODL.
 
-[[4] Ruby RDF library `rdf`][ref4]
+[[4] `RDF.rb`][ref4]; Linked Data for Ruby
 
-[[5] Raptor RDF library][ref5]
+[[5] _Raptor_][ref5]; Raptor RDF Syntax Library
 
-[[6] Ruby RDF library `rdf-raptor` Raptor interface][ref6]
+[[6] `rdf_raptor`][ref6]; Raptor RDF Parser Plugin for RDF.rb
 
-[[7] Python ROSRS_Session in RO Manager][ref7]
- 
-[[8] ruby-http-session project, or successor][ref8]
+[[7] _Python ROSRS\_Session in RO Manager_][ref7];  See also the test suite: [TestROSRS_Session.py ](https://github.com/wf4ever/ro-manager/blob/master/src/rocommand/test/TestROSRS_Session.py).
 
-[[9] myExperiment][ref9]
+[[8] `ruby-http-session` project, or successor][ref8]
+
+[[9] _myExperiment_][ref9];  "De Roure, D., Goble, C. and Stevens, R. (2009) The Design and Realisation of the myExperiment Virtual Research Environment for Social Sharing of Workflows. Future Generation Computer Systems 25, pp. 561-567. doi:10.1016/j.future.2008.06.010"
+
 
