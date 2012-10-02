@@ -28,10 +28,11 @@ require "./namespaces"
 
 # Test configuration values - may be imported later
 class TestConfig
-  attr :rosrs_api_uri, :authorization
-  attr :test_ro_name, :test_ro_path, :test_ro_uri
-  attr :test_res1_rel, :test_res2_rel
-  attr :test_res1_uri, :test_res2_uri
+  attr_accessor :rosrs_api_uri, :authorization
+  attr_accessor :test_ro_name, :test_ro_path
+  attr_accessor :test_ro_uri
+  attr_accessor :test_res1_rel, :test_res2_rel
+  attr_accessor :test_res1_uri, :test_res2_uri
 
   def initialize
     @rosrs_api_uri  = "http://sandbox.wf4ever-project.org/rodl/ROs/"

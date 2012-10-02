@@ -2,9 +2,9 @@
 
 require 'net/http'
 require 'logger'
-require 'json'
 
 require 'rubygems'
+require 'json'
 require 'rdf'
 require 'rdf/raptor'
 
