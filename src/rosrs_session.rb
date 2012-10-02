@@ -206,6 +206,9 @@ class ROSRS_Session
     else
       error("Unrecognized HTTP method #{method}")
     end
+    if options[:body]
+      req.body = options[:body]
+    end
     getRequestHeaders(options).each { |h,v| req.add_field(h, v) }
     resp = @http.request(req)
     if log.debug?
