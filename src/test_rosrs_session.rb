@@ -271,7 +271,8 @@ class TestROSRS_Session < Test::Unit::TestCase
     c,r,u = @rosrs.createROAnnotationBody(@rouri, g)
     assert_equal(201, c)
     assert_equal("Created", r)
-    assert_equal(nil, u)
+    assert_match(%r(http://sandbox.wf4ever-project.org/rodl/ROs/TestSessionRO_ruby/), u.to_s)
+    #assert_equal(nil, u)
     c,r = deleteTestRo
   end
 
