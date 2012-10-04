@@ -370,25 +370,49 @@ class ROSRS_Session
     code, reason, bodyproxyuri, bodyuri = aggregateResourceInt(rouri, nil,
       :ctype => "application/rdf+xml",
       :body  => anngr.serialize(format=:xml))
-    if status != 201
+    if code != 201
       error("Error creating annotation body resource",
-            "#{status}, #{reason}, #{str(resuri)}")
+            "#{code}, #{reason}, #{str(resuri)}")
     end
     return [code, reason, bodyuri]
   end
 
+  def createAnnotationStubRDF(rouri, resuri, bodyuri)
+    # Create entity body for annotation stub
+    v = { :xmlbase => rouri.to_s,
+          :resuri  => resuri.to_s,
+          :bodyuri => bodyuri.to_s
+        }
+    annotation_stub = %Q(<?xml version="1.0" encoding="UTF-8"?>
+        <rdf:RDF
+          xmlns:ro="http://purl.org/wf4ever/ro#"
+          xmlns:ao="http://purl.org/ao/"
+          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+          xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+          xml:base="#{v[:xmlbase]}"
+        >
+          <ro:AggregatedAnnotation>
+            <ao:annotatesResource rdf:resource="#{v[:resuri]}" />
+            <ao:body rdf:resource="#{v[:bodyuri]}" />
+          </ro:AggregatedAnnotation>
+        </rdf:RDF>
+        )
+    return annotation_stub
+  end
+
   def createROAnnotationStub(rouri, resuri, bodyuri)
-      # Create an annotation stub for supplied resource using indicated body
-      #   
-      # Returns: [code, reason, stuburi]
-      annotation = self.createAnnotationRDF(rouri, resuri, bodyuri)
-      code, reason, headers, ddata = doRequest("POST", rouri,
-          :ctype => "application/vnd.wf4ever.annotation",
-          :body  => annotation)
-      if c != 201
-          error("Error creating annotation #{c}, #{r}, #{str(resuri)}")
-      end
-      return (c, r, URI(headers["location"]))
+    # Create an annotation stub for supplied resource using indicated body
+    #   
+    # Returns: [code, reason, stuburi]
+    annotation = createAnnotationStubRDF(rouri, resuri, bodyuri)
+    code, reason, headers, data = doRequest("POST", rouri,
+        :ctype => "application/vnd.wf4ever.annotation",
+        :body  => annotation)
+    if code != 201
+        error("Error creating annotation #{code}, #{reason}, #{str(resuri)}")
+    end
+    return [code, reason, URI(headers["location"])]
+  end
 
   # def createROAnnotationInt(rouri, resuri, anngr)
   #   # Create internal annotation
@@ -401,7 +425,7 @@ class ROSRS_Session
   # end
 
   def createROAnnotationExt(rouri, resuri, bodyuri)
-    # Creeate a resource annotation using an existing (possibly external) annotation body
+    # Create a resource annotation using an existing (possibly external) annotation body
     #
     # Returns: (status, reason, annuri)
   end
