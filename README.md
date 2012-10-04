@@ -113,7 +113,7 @@ Here is a flavour of how the `rosrs_session` module may be used:
 
 ## Development setup
 
-Development has been performed using Ruby 1.8.7 on Ubuntu Linux 10.04 and 12.04.  The code uses `rubygems`, `rdf` and `rdf-raptor` libraries beyond the standard Ruby libraries.
+Development has been performed using Ruby 1.8.7 on Ubuntu Linux 10.04 and 12.04.  The code uses `rubygems`, `json`, `rdf` and `rdf-raptor` libraries beyond the standard Ruby libraries.
 
 The `rdf-raptor` Ruby library uses the Ubuntu `raptor-util` and `libraptor-dev` packages.  NOTE: the Ruby RDF documentation does not mention `libraptor-dev`, but I found that without this the RDF libraries would not work for parsing and serializing RDF/XML.
 

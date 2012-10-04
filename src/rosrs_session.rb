@@ -366,33 +366,29 @@ class ROSRS_Session
   def createROAnnotationBody(rouri, anngr)
     # Create an annotation body from a supplied annnotation graph.
     #
-    # Returns: (status, reason, bodyuri)
-    (status, reason, bodyproxyuri, bodyuri) = aggregateResourceInt(rouri, nil,
+    # Returns: [code, reason, bodyuri]
+    code, reason, bodyproxyuri, bodyuri = aggregateResourceInt(rouri, nil,
       :ctype => "application/rdf+xml",
       :body  => anngr.serialize(format=:xml))
     if status != 201
       error("Error creating annotation body resource",
             "#{status}, #{reason}, #{str(resuri)}")
     end
-    return [status, reason, bodyuri]
+    return [code, reason, bodyuri]
   end
 
-  # def createROAnnotationStub(self, rouri, resuri, bodyuri):
-  #     """
-  #     Create an annotation stub for supplied resource using indicated body
-  #
-  #     Returns: (status, reason, annuri)
-  #     """
-  #     annotation = self.createAnnotationRDF(rouri, resuri, bodyuri)
-  #     (status, reason, headers, data) = self.doRequest(rouri,
-  #         method="POST",
-  #         ctype="application/vnd.wf4ever.annotation",
-  #         body=annotation)
-  #     if status != 201:
-  #         raise self.error("Error creating annotation",
-  #             "%03d %s (%s)"%(status, reason, str(resuri)))
-  #     annuri   = rdflib.URIRef(headers["location"])
-  #     return (status, reason, annuri)
+  def createROAnnotationStub(rouri, resuri, bodyuri)
+      # Create an annotation stub for supplied resource using indicated body
+      #   
+      # Returns: [code, reason, stuburi]
+      annotation = self.createAnnotationRDF(rouri, resuri, bodyuri)
+      code, reason, headers, ddata = doRequest("POST", rouri,
+          :ctype => "application/vnd.wf4ever.annotation",
+          :body  => annotation)
+      if c != 201
+          error("Error creating annotation #{c}, #{r}, #{str(resuri)}")
+      end
+      return (c, r, URI(headers["location"]))
 
   # def createROAnnotationInt(rouri, resuri, anngr)
   #   # Create internal annotation

@@ -29,8 +29,7 @@ require "./namespaces"
 # Test configuration values - may be imported later
 class TestConfig
   attr_accessor :rosrs_api_uri, :authorization
-  attr_accessor :test_ro_name, :test_ro_path
-  attr_accessor :test_ro_uri
+  attr_accessor :test_ro_name, :test_ro_path, :test_ro_uri
   attr_accessor :test_res1_rel, :test_res2_rel
   attr_accessor :test_res1_uri, :test_res2_uri
 
@@ -273,6 +272,26 @@ class TestROSRS_Session < Test::Unit::TestCase
     assert_equal("Created", r)
     assert_match(%r(http://sandbox.wf4ever-project.org/rodl/ROs/TestSessionRO_ruby/), u.to_s)
     #assert_equal(nil, u)
+    c,r = deleteTestRo
+  end
+
+  def test_createROAnnotationStub
+    # [code, reason, stuburi] = createROAnnotationStub(rouri, resuri, bodyuri)
+    c,r,u,m = createTestRo
+    assert_equal(201, c)
+    c,r,u = @rosrs.createROAnnotationStub(@rouri, 
+        "http://example.org/resource", "http://example.org/body")
+    assert_equal(201, c)
+    assert_equal("Created", r)
+    assert_match(%r(http://sandbox.wf4ever-project.org/rodl/ROs/TestSessionRO_ruby/\.ro/), u.to_s)
+    c,r = deleteTestRo
+  end
+
+  def zz_test_zzzzzz
+    # [code, reason, stuburi] = zzzzzz(rouri, resuri, bodyuri)
+    c,r,u,m = createTestRo
+    assert_equal(201, c)
+    # ...
     c,r = deleteTestRo
   end
 
