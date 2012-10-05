@@ -11,7 +11,7 @@ require 'rdf/raptor'
 require './namespaces'
 require './rdf_graph'
 
-# Set up logger for this module
+# Set up logger for this module if none already defined
 # @@TODO connect to multi-module logging framework (log4r?)
 
 if not defined?($log)
@@ -31,6 +31,15 @@ if not defined?($log)
     $log.level = loglevel
   end
 end
+
+ANNOTATION_CONTENT_TYPES =
+    { "application/rdf+xml" => :xml,
+      "text/turtle"         => :turtle,
+      #"text/n3"             => :n3,
+      "text/nt"             => :ntriples,
+      #"application/json"    => :jsonld,
+      #"application/xhtml"   => :rdfa,
+    }
 
 class ROSRS_Session_Error < Exception
   # Exception class used to signal HTTP Session errors
@@ -64,6 +73,7 @@ class ROSRS_Session
     if value
       msg += " (#{value})"
     end
+    log.error("ROSRS_Session_Error on #{@uri} #{msg}")
     raise ROSRS_Session_Error.new("ROSRS_Session_Error on #{@uri} #{msg}")
   end
 
@@ -141,6 +151,9 @@ class ROSRS_Session
 
   def getRequestPath(uripath)
     # Extract path (incl query) for HTTP request
+    # Should accept URI, RDF::URI or string values
+    # Must be same host and port as session URI
+    # Relative values are based on session URI
     uripath = URI(uripath.to_s)
     if uripath.scheme and (uripath.scheme != @uri.scheme)
       error("Request URI scheme does not match session: #{uripath}")
@@ -178,6 +191,8 @@ class ROSRS_Session
   def doRequest(method, uripath, options)
     # Perform HTTP request
     #
+    # method        HTTP method name
+    # uripath       is reference or URI of resource (see getRequestPath)
     # options: {
     #   body    => body to accompany request
     #   ctype   => content type of supplied body
@@ -186,8 +201,6 @@ class ROSRS_Session
     #   }
     # Return [code, reason(text), response headers, response body]
     #
-    # @@TODO - refactor so that request objects are built separately,
-    #          and request headers added by common code
     if log.debug?
       log.debug { "ROSRS_session.doRequest #{method}, #{uripath}" }
       options.each { |k,v| log.debug "- option[#{k}] = #{v}" }
@@ -227,17 +240,19 @@ class ROSRS_Session
     code, reason, headers, data = doRequest(method, uripath, options)
     if [302,303,307].include?(code)
       uripath = headers["location"]
+      log.debug("doRequestFollowRedirect: #{code} #{reason} -> #{uripath}")
       code, reason, headers, data = doRequest(method, uripath, options)
     end
     if [302,307].include?(code)
       # Allow second temporary redirect
       uripath = headers["location"]
+      log.debug("doRequestFollowRedirect: #{code} #{reason} -> #{uripath}")
       code, reason, headers, data = doRequest(method, uripath, options)
     end
-    return [code, reason, headers, URI(uripath), data]
+    return [code, reason, headers, uripath, data]
   end
 
-  def doRequestRDF(method, uripath, options)
+  def doRequestRDF(method, uripath, options=nil)
     # Perform HTTP request expecting an RDF/XML response
     # Return [code, reason(text), response headers, manifest graph]
     # Returns the manifest as a graph if the request is successful
@@ -251,6 +266,11 @@ class ROSRS_Session
       if h["content-type"].downcase == "application/rdf+xml"
         begin
           d = RDF_Graph.new(:data => d, :format => :xml)
+          if log.debug?
+            log.debug "- RDF statements"
+            d.each_statement { |s| log.debug("- #{s}") }
+            log.debug "----"
+          end
         rescue Exception => e
           c = 902
           r = "RDF parse failure (#{e.message})"
@@ -385,11 +405,11 @@ class ROSRS_Session
     return [code, reason, headers, uri, data]
   end
 
-  def getROResourceRDF(resuriref, rouri=nil, options={})
+  def getROResourceRDF(resuri, rouri=nil, options={})
     # Retrieve RDF resource from RO
     #
-    # resuriref     is relative reference or URI of resource
-    # rouri         is URI of RO, used as base for relative reference
+    # resuri    is relative reference or URI of resource
+    # rouri     is URI of RO, used as base for relative reference
     # options:
     #   headers => (request headers)
     #
@@ -403,7 +423,7 @@ class ROSRS_Session
     end
     code, reason, headers, uri, data = doRequestRDF("GET", resuri, options)
     if not [200,404].include?(code)
-      error("Error retrieving RO resource: #{code}, #{reason}, #{resuriref}")
+      error("Error retrieving RO resource: #{code}, #{reason}, #{resuri}")
     end
     return [code, reason, headers, uri, data]
   end
@@ -503,7 +523,7 @@ class ROSRS_Session
 
   def createROAnnotationStub(rouri, resuri, bodyuri)
     # Create an annotation stub for supplied resource using indicated body
-    #   
+    #
     # Returns: [code, reason, stuburi]
     annotation = createAnnotationStubRDF(rouri, resuri, bodyuri)
     code, reason, headers, data = doRequest("POST", rouri,
@@ -549,15 +569,19 @@ class ROSRS_Session
     # (or all annotations for an RO)
     #
     # Returns an array of annotation URIs
+    log.debug("getROAnnotationStubUris #{rouri}, #{resuri}")
     manifesturi, manifest = getROManifest(rouri)
-    if code != 200
-      error("No manifest: #{code}, #{reason}, #{rouri.to_s}")
-    end
     stuburis = []
-    manifest.query(:subject => rouri) do |stmt|
+    manifest.query(:object => RDF::URI(resuri)) do |stmt|
+      log.debug("- test #{stmt}")
       if [AO.annotatesResource,RO.annotatesAggregatedResource].include?(stmt.predicate)
-        stuburis << stmt.object
+        stuburis << stmt.subject
       end
+    end
+    if log.debug?
+      log.debug "- Annotation stub URIs"
+      stuburis.each { |a| log.debug("- #{a}") }
+      log.debug "----"
     end
     return stuburis
   end
@@ -567,29 +591,68 @@ class ROSRS_Session
     # (or all annotations for an RO)
     #
     # Returns an array of annotation body URIs
+    bodyuris = []
+    getROAnnotationStubUris(rouri, resuri).each do |stuburi|
+      bodyuris << getROAnnotationBodyUri(stuburi)
+    end
+    if log.debug?
+      log.debug "- Annotation body URIs"
+      bodyuris.each { |a| log.debug("- #{a}") }
+      log.debug "----"
+    end
+    return bodyuris
   end
 
-  def getROAnnotationBodyUri(annuri)
-    # Retrieve annotation for given annotation URI
+  def getROAnnotationBodyUri(stuburi)
+    # Retrieve annotation body URI for given annotation stub URI
+    code, reason, headers, data = doRequest("GET", stuburi, {})
+    if code != 303
+      error("No redirect from annnotation stub URI: #{code} #{reason}, #{stuburi}")
+    end
+    if [nil,""].include?(headers['location'])
+      error("No location for redirect from annnotation stub URI: #{code} #{reason}, #{stuburi}")
+    end
+    return RDF::URI(headers['location'])
   end
 
-  def getROAnnotationGraph(rouri, resuri=None)
-    # Build RDF graph of annnotations associated with a resource
+  def getROAnnotationGraph(rouri, resuri=nil)
+    # Build RDF graph of all annnotations associated with a resource
     # (or all annotations for an RO)
     #
     # Returns graph of merged annotations
+    agraph = RDF_Graph.new
+    getROAnnotationUris(rouri, resuri).each do |auri|
+      code, reason, headers, buri, bodytext = doRequestFollowRedirect(auri)
+      if code == 200
+        content_type = headers['content-type'].split(';', 2)[0].strip.downcase
+        if ANNOTATION_CONTENT_TYPES.include?(content_type)
+          bodyformat = ANNOTATION_CONTENT_TYPES[content_type]
+          agraph.load_data(bodytext, bodyformat)
+        else
+          log.warn("getROResourceAnnotationGraph: #{buri} has unrecognized content-type: #content_type")
+        end
+      else
+        log.warn("getROResourceAnnotationGraph: #{buri} read failure: #{code} #{reason}")
+      end
+    end
+    #~ return agraph
   end
 
-  def getROAnnotation(annuri)
+  def getROAnnotationBody(annuri)
     # Retrieve annotation for given annotation URI
     #
-    # Returns: (code, reason, bodyuri, anngr)
+    # Returns: [code, reason, bodyuri, anngr]
+    code, reason, headers, uri, anngr = getROResourceRDF(annuri)
+    return [code, reason, uri, anngr]
   end
 
   def removeROAnnotation(rouri, annuri)
     # Remove annotation at given annotation URI
     #
     # Returns: (code, reason)
+    #~ (status, reason, headers, data) = self.doRequest(annuri,
+        #~ method="DELETE")
+    #~ return (status, reason)
   end
 
 end

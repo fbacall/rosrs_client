@@ -1,4 +1,5 @@
-# @@TODO: create separate module for test configuration (RODL, etc)
+# Test suite for ROSRS_Session
+
 
 require "test/unit"
 require "logger"
@@ -26,7 +27,12 @@ end
 require "./rosrs_session"
 require "./namespaces"
 
+RDFS = RDF::RDFS
+
 # Test configuration values - may be imported later
+#
+# @@TODO: create separate module for test configuration (RODL, etc)
+#
 class TestConfig
   attr_accessor :rosrs_api_uri, :authorization
   attr_accessor :test_ro_name, :test_ro_path, :test_ro_uri
@@ -75,26 +81,30 @@ class TestROSRS_Session < Test::Unit::TestCase
 
   def stmt(triple)
     s,p,o = triple
-    return RDF::Statement(:subject=>s,:predicate=>p,:object=>o)
+    return RDF::Statement(:subject=>s, :predicate=>p, :object=>o)
   end
 
   def assert_contains(triple, graph)
     #~ log.debug("assert_contains #{triple}")
     #~ graph.each_statement { |stmt| log.debug("- #{stmt}") }
-    assert(graph.has_statement?(stmt(triple)), "Expected triple #{triple}")
+    assert(graph.match?(stmt(triple)), "Expected triple #{triple}")
   end
 
   def assert_not_contains(triple, graph)
     #~ log.debug("assert_contains #{triple}")
     #~ graph.each_statement { |stmt| log.debug("- #{stmt}") }
-    assert((not graph.has_statement?(stmt(triple))), "Unexpected triple #{triple}")
+    assert((not graph.match?(stmt(triple))), "Unexpected triple #{triple}")
   end
 
-	def assert_includes(item, list)
-		assert(list.include?(item), "Expected item #{item}")
-	end
+  def assert_includes(item, list)
+    assert(list.include?(item), "Expected item #{item}")
+  end
 
-  def createTestRo
+  def assert_not_includes(item, list)
+    assert((not list.include?(item)), "Unexpected item #{item}")
+  end
+
+  def createTestRO
     c, r = @rosrs.deleteRO(Config.test_ro_uri)
     c,r,u,m = @rosrs.createRO(Config.test_ro_name,
         "Test RO for ROSRS_Session", "TestROSRS_Session.py", "2012-09-28")
@@ -138,23 +148,26 @@ class TestROSRS_Session < Test::Unit::TestCase
     # @@TODO Add external resource
   end
 
-  def deleteTestRo
+  def deleteTestRO
     c, r = @rosrs.deleteRO(@rouri)
     return [c, r]
-  end
-
-  def test_Namespace_ORE
-    assert_equal(RDF::URI("http://www.openarchives.org/ore/terms/Aggregation"),
-                 ORE.Aggregation
-                 )
-    assert_equal(RDF::URI("http://www.openarchives.org/ore/terms/Aggregation"),
-                 ORE.Aggregation
-                 )
   end
 
   # ----------
   # Test cases
   # ----------
+
+  def test_Namespaces
+    assert_equal(RDF::URI("http://www.openarchives.org/ore/terms/Aggregation"),
+                 ORE.Aggregation
+                 )
+    assert_equal(RDF::URI("http://www.openarchives.org/ore/terms/Aggregation"),
+                 ORE.Aggregation
+                 )
+    assert_equal(RDF::URI("http://www.w3.org/2000/01/rdf-schema#seeAlso"),
+                 RDFS.seeAlso
+                 )
+  end
 
   def test_SplitValues
     assert_equal(['a','b','c'],
@@ -209,8 +222,34 @@ class TestROSRS_Session < Test::Unit::TestCase
     end
   end
 
+  def test_queryGraph
+    b = %q(
+        <rdf:RDF
+          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+          xmlns:ex="http://example.org/" >
+          <ex:Resource rdf:about="http:/example.com/res/1">
+            <ex:foo rdf:resource="http://example.com/res/1" />
+            <ex:bar>Literal property</ex:bar>
+          </ex:Resource>
+        </rdf:RDF>
+        )
+    g  = RDF_Graph.new(:data => b)
+    stmts = []
+    g.query([nil, nil, nil]) { |s| stmts << s }
+    log.debug("test_queryGraph stmts: #{stmts}")
+    s1 = stmt([uri("http:/example.com/res/1"),uri("http://example.org/foo"),uri("http://example.com/res/1")])
+    s2 = stmt([uri("http:/example.com/res/1"),uri("http://example.org/bar"),lit("Literal property")])
+    assert_includes(s1, stmts)
+    assert_includes(s2, stmts)
+    stmts = []
+    g.query(:object => uri("http://example.com/res/1")) { |s| stmts << s }
+    log.debug("test_queryGraph stmts: #{stmts}")
+    assert_includes(s1, stmts)
+    assert_not_includes(s2, stmts)
+  end
+
   def test_HTTP_Simple_Get
-    c,r,u,m = createTestRo
+    c,r,u,m = createTestRO
     assert_equal(201, c)
     c,r,h,b = @rosrs.doRequest("GET", @rouri,
       {:accept => "application/rdf+xml"})
@@ -218,11 +257,11 @@ class TestROSRS_Session < Test::Unit::TestCase
     assert_equal("See Other", r)
     assert_equal("application/rdf+xml", h["content-type"])
     assert_equal("", b)
-    c,r = deleteTestRo
+    c,r = deleteTestRO
   end
 
   def test_HTTP_Redirected_Get
-    c,r,u,m = createTestRo
+    c,r,u,m = createTestRO
     assert_equal(201, c)
     c,r,h,u,b = @rosrs.doRequestFollowRedirect("GET", @rouri,
         {:accept => "application/rdf+xml"})
@@ -231,23 +270,38 @@ class TestROSRS_Session < Test::Unit::TestCase
     assert_equal("application/rdf+xml", h["content-type"])
     assert_equal(Config.test_ro_uri+".ro/manifest.rdf", u.to_s)
     #assert_match(???, b)
-    c,r = deleteTestRo
+    c,r = deleteTestRO
   end
 
-  def test_createTestRo
-    c,r,u,m = createTestRo
+  def test_createTestRO
+    c,r,u,m = createTestRO
     assert_equal(201, c)
     assert_equal("Created", r)
     assert_equal(Config.test_ro_uri, u)
     s = stmt([uri(Config.test_ro_uri), RDF.type, RO.ResearchObject])
     assert_contains(s, m)
-    c,r = deleteTestRo
+    c,r = deleteTestRO
     assert_equal(204, c)
     assert_equal("No Content", r)
   end
 
+  def test_getROManifest()
+    # [manifesturi, manifest] = getROManifest(rouri)
+    c,r,u,m = createTestRO
+    assert_equal(201, c)
+    # Get manifest
+    manifesturi, manifest = @rosrs.getROManifest(u)
+    assert_equal(@rouri.to_s+".ro/manifest.rdf", manifesturi.to_s)
+    # Check manifest RDF graph
+    assert_contains([uri(@rouri), RDF.type, RO.ResearchObject], manifest)
+    assert_contains([uri(@rouri), DCTERMS.creator, nil], manifest)
+    assert_contains([uri(@rouri), DCTERMS.created, nil], manifest)
+    assert_contains([uri(@rouri), ORE.isDescribedBy, uri(manifesturi)], manifest)
+    return
+  end
+
   def test_aggregateResourceInt
-    c,r,u,m = createTestRo
+    c,r,u,m = createTestRO
     assert_equal(201, c)
     body    = "test_aggregateResourceInt resource body\n"
     options = { :body => body, :ctype => "text/plain" }
@@ -259,11 +313,11 @@ class TestROSRS_Session < Test::Unit::TestCase
     puri_act = puri.to_s.slice(0...puri_exp.length)
     assert_equal(puri_exp, puri_act)
     assert_equal(Config.test_ro_uri+"test_aggregateResourceInt", ruri.to_s)
-    c,r = deleteTestRo
+    c,r = deleteTestRO
   end
 
   def test_createROAnnotationBody
-    c,r,u,m = createTestRo
+    c,r,u,m = createTestRO
     assert_equal(201, c)
     b = %q(
         <rdf:RDF
@@ -284,112 +338,120 @@ class TestROSRS_Session < Test::Unit::TestCase
     assert_equal("Created", r)
     assert_match(%r(http://sandbox.wf4ever-project.org/rodl/ROs/TestSessionRO_ruby/), u.to_s)
     #assert_equal(nil, u)
-    c,r = deleteTestRo
+    c,r = deleteTestRO
   end
 
   def test_createROAnnotationStub
     # [code, reason, stuburi] = createROAnnotationStub(rouri, resuri, bodyuri)
-    c,r,u,m = createTestRo
+    c,r,u,m = createTestRO
     assert_equal(201, c)
-    c,r,u = @rosrs.createROAnnotationStub(@rouri, 
+    c,r,u = @rosrs.createROAnnotationStub(@rouri,
         "http://example.org/resource", "http://example.org/body")
     assert_equal(201, c)
     assert_equal("Created", r)
     assert_match(%r(http://sandbox.wf4ever-project.org/rodl/ROs/TestSessionRO_ruby/\.ro/), u.to_s)
-    c,r = deleteTestRo
+    c,r = deleteTestRO
   end
 
   def test_createROAnnotationInt
     # [code, reason, annuri, bodyuri] = createROAnnotationInt(rouri, resuri, anngr)
-    c,r,u,m = createTestRo
+    c,r,u,m = createTestRO
     assert_equal(201, c)
     populateTestRo
-		# Create internal annotation on @res_txt
-		annbody1 = %Q(<?xml version="1.0" encoding="UTF-8"?>
-			<rdf:RDF
-				 xmlns:dct="http://purl.org/dc/terms/"
-				 xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-				 xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-				 xml:base="#{@rouri}"
-			>
-				<rdf:Description rdf:about="test/file.txt">
-				<dct:title>Title 1</dct:title>
-				<rdfs:seeAlso rdf:resource="http://example.org/test1" />
-				</rdf:Description>
-			</rdf:RDF>
-			)
-		agraph1 = RDF_Graph.new(:data => annbody1, :format => :xml)
-		c,r,annuri,bodyuri1 = @rosrs.createROAnnotationInt(
-			@rouri, @res_txt, agraph1)
-		assert_equal(201, c)
-		assert_equal("Created", r)
-		# Retrieve annotation URIs
-		auris1 = @rosrs.getROAnnotationStubUris(@rouri, @res_txt)
-		assert_includes(annuri, auris1)
-		### buris1 = list(self.rosrs.getROAnnotationBodyUris(rouri, resuri))
-		### self.assertIn(bodyuri1, buris1)
-		# Retrieve annotation
-		c,r,auri1,agr1a = @rosrs.getROAnnotation(annuri)
-		assert_equal(c, 200)
-		assert_equal(r, "OK")
-		s1a = [@res_txt, DCTERMS.title, lit("Title 1")]
-		s1b = [@res_txt, RDFS.seeAlso,  uri("http://example.org/test1")]
-		assert_contains(s1a,agr1a)
-		assert_contains(s1b,agr1a)
-		# Retrieve merged annotations
-		agr1b = @rosrs.getROAnnotationGraph(@rouri, @res_txt)
-		assert_contains(s1a,agr1b)
-		assert_contains(s1b,agr1b)
-		# Update internal annotation
-		annbody2 = %Q(<?xml version="1.0" encoding="UTF-8"?>
-			<rdf:RDF
-				xmlns:dct="http://purl.org/dc/terms/"
-				xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-				xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-				xml:base="#{rouri}"
-			>
-				<rdf:Description rdf:about="test/file.txt">
-				<dct:title>Title 2</dct:title>
-				<rdfs:seeAlso rdf:resource="http://example.org/test2" />
-				</rdf:Description>
-			</rdf:RDF>
-			)
-		agraph2 = RDF_Graph.new(:data => annbody2, :format => :xml)
-		c,r,bodyuri2 = @rosrs.updateROAnnotationInt(
-			@rouri, annuri, @res_txt, agraph2)
-		assert_equal(c, 200)
-		assert_equal(r, "OK")
-		# Retrieve annotation URIs
-		auris2 = @rosrs.getROAnnotationStubUris(@rouri, @res_txt)
-		assert_includes(annuri, auris2)
-		### buris2 = list(self.rosrs.getROAnnotationBodyUris(rouri, resuri))
-		### self.assertIn(bodyuri1, buris2)
-		# Retrieve annotation
-		c,r,auri2,agr2a = @rosrs.getROAnnotation(annuri)
-		assert_equal(c, 200)
-		assert_equal(r, "OK")
-		s2a = [@res_txt, DCTERMS.title, lit("Title 2")]
-		s2b = [@res_txt, RDFS.seeAlso,  uri("http://example.org/test2")]
-		assert_not_contains(s1a,agr1a)
-		assert_not_contains(s1b,agr1a)
-		assert_contains(s2a,agr1a)
-		assert_contains(s2b,agr1a)
-		# Retrieve merged annotations
-		agr2b = @rosrs.getROAnnotationGraph(@rouri, @res_txt)
-		assert_not_contains(s1a,agr1a)
-		assert_not_contains(s1b,agr1a)
-		assert_contains(s2a,agr1a)
-		assert_contains(s2b,agr1a)
-		# Clean up
-    c,r = deleteTestRo
+    # Create internal annotation on @res_txt
+    annbody1 = %Q(<?xml version="1.0" encoding="UTF-8"?>
+      <rdf:RDF
+         xmlns:dct="http://purl.org/dc/terms/"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xml:base="#{@rouri}"
+      >
+        <rdf:Description rdf:about="test/file.txt">
+        <dct:title>Title 1</dct:title>
+        <rdfs:seeAlso rdf:resource="http://example.org/test1" />
+        </rdf:Description>
+      </rdf:RDF>
+      )
+    agraph1 = RDF_Graph.new(:data => annbody1, :format => :xml)
+    c,r,annuri,bodyuri1 = @rosrs.createROAnnotationInt(
+      @rouri, @res_txt, agraph1)
+    assert_equal(201, c)
+    assert_equal("Created", r)
+    # Retrieve annotation URIs
+    auris1 = @rosrs.getROAnnotationStubUris(@rouri, @res_txt)
+    assert_includes(uri(annuri), auris1)
+    buris1 = @rosrs.getROAnnotationBodyUris(@rouri, @res_txt)
+    assert_includes(uri(bodyuri1), buris1)
+    # Retrieve annotation
+    c,r,auri1,agr1a = @rosrs.getROAnnotationBody(annuri)
+    assert_equal(200, c)
+    assert_equal("OK", r)
+    # The following test fails, due to a temp[orary redirect from the annotation
+    # body URI in the stub to the actual URI used to retrieve the body:
+    # assert_includes(auri1, buris1)
+    if log.debug?
+      log.debug "- Annotation statements"
+      agr1a.each_statement { |s| log.debug("- #{s}") }
+      log.debug "----"
+    end
+    s1a = [@res_txt, DCTERMS.title, lit("Title 1")]
+    s1b = [@res_txt, RDFS.seeAlso,  uri("http://example.org/test1")]
+    assert_contains(s1a,agr1a)
+    assert_contains(s1b,agr1a)
+    # Retrieve merged annotations
+    agr1b = @rosrs.getROAnnotationGraph(@rouri, @res_txt)
+    assert_contains(s1a,agr1b)
+    assert_contains(s1b,agr1b)
+    # Update internal annotation
+    annbody2 = %Q(<?xml version="1.0" encoding="UTF-8"?>
+      <rdf:RDF
+        xmlns:dct="http://purl.org/dc/terms/"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+        xml:base="#{rouri}"
+      >
+        <rdf:Description rdf:about="test/file.txt">
+        <dct:title>Title 2</dct:title>
+        <rdfs:seeAlso rdf:resource="http://example.org/test2" />
+        </rdf:Description>
+      </rdf:RDF>
+      )
+    agraph2 = RDF_Graph.new(:data => annbody2, :format => :xml)
+    c,r,bodyuri2 = @rosrs.updateROAnnotationInt(
+      @rouri, annuri, @res_txt, agraph2)
+    assert_equal(c, 200)
+    assert_equal(r, "OK")
+    # Retrieve annotation URIs
+    auris2 = @rosrs.getROAnnotationStubUris(@rouri, @res_txt)
+    assert_includes(uri(annuri), auris2)
+    buris2 = @rosrs.getROAnnotationBodyUris(@rouri, @res_txt)
+    assert_includes(uri(bodyuri2), buris2)
+    # Retrieve annotation
+    c,r,auri2,agr2a = @rosrs.getROAnnotationBody(annuri)
+    assert_equal(c, 200)
+    assert_equal(r, "OK")
+    s2a = [@res_txt, DCTERMS.title, lit("Title 2")]
+    s2b = [@res_txt, RDFS.seeAlso,  uri("http://example.org/test2")]
+    assert_not_contains(s1a,agr1a)
+    assert_not_contains(s1b,agr1a)
+    assert_contains(s2a,agr1a)
+    assert_contains(s2b,agr1a)
+    # Retrieve merged annotations
+    agr2b = @rosrs.getROAnnotationGraph(@rouri, @res_txt)
+    assert_not_contains(s1a,agr1a)
+    assert_not_contains(s1b,agr1a)
+    assert_contains(s2a,agr1a)
+    assert_contains(s2b,agr1a)
+    # Clean up
+    c,r = deleteTestRO
   end
 
-  def zz_test_zzzzzz
-    # [code, reason, stuburi] = zzzzzz(rouri, resuri, bodyuri)
-    c,r,u,m = createTestRo
-    assert_equal(201, c)
-    # ...
-    c,r = deleteTestRo
-  end
+  #~ def test_zzzzzz
+    #~ # [code, reason, stuburi] = zzzzzz(rouri, resuri, bodyuri)
+    #~ c,r,u,m = createTestRO
+    #~ assert_equal(201, c)
+    #~ # ...
+    #~ c,r = deleteTestRO
+  #~ end
 
  end

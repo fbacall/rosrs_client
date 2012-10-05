@@ -1,13 +1,37 @@
 # Shim class for RDF graph parsing, serialization, access
 
+# Set up logger for this module
+# @@TODO connect to multi-module logging framework (log4r?)
+
+if not defined?($log)
+  loglevel = nil
+  #loglevel = Logger::DEBUG
+  loglevel = Logger::INFO
+  #loglevel = Logger::WARN
+  #loglevel = Logger::ERROR
+  $log = Logger.new(STDOUT)
+  #log = logger.new(__FILE__+".log")
+  $log.progname = "rdf_graph"
+  $log.formatter = proc { |sev, dat, prg, msg|
+      "#{prg}: #{msg}\n"
+    }
+  $log.level = Logger::ERROR
+  if loglevel
+    $log.level = loglevel
+  end
+end
+
 class RDF_Graph
+
+  attr_reader :log
 
   def initialize(options)
     # options: :uri =>    (URI to load),
     #          :data =>   (string to load)
     #          :format => (format of data)
     @format = :rdfxml
-    @graph = RDF::Graph.new
+    @graph  = RDF::Graph.new
+    @log    = $log
     if options[:uri]
       load_resource(options[:uri], options[:format])
     end
@@ -36,6 +60,17 @@ class RDF_Graph
 
   def each_statement(&block)
     @graph.each_statement(&block)
+  end
+
+  def query(pattern, &block)
+    log.debug("RDF_Graph.query #{pattern}")
+    @graph.query(pattern, &block)
+  end
+
+  def match?(pattern)
+    pattern_found = false
+    @graph.query(pattern) { |s| pattern_found = true }
+    return pattern_found
   end
 
   # Private helpers

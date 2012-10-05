@@ -1,5 +1,6 @@
 require 'rubygems'
 require 'rdf'
+require 'rdf/vocab'
 
 class Namespace
   def initialize(prefix, base, memberlist)
@@ -55,12 +56,15 @@ ROTERMS = Namespace.new("ROTERMS", roterms,
             [ "note", "resource", "defaultBase"
             ])
 
+#RDF     = RDF::RDF
 RDF__   = Namespace.new("RDF", "...",
             [ "Seq", "Bag", "Alt", "Statement", "Property",
               "XMLLiteral", "List", "PlainLiteral",
               "subject", "predicate", "object",
               "type", "value", "first", "rest", "nil"
             ])
+
+#RDFS    = RDF::RDFS
 RDFS__  = Namespace.new("RDFS", "...",
             [ "Resource", "Class", "Literal", "Datatype",
               "subClassOf", "subPropertyOf",
