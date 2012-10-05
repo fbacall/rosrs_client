@@ -366,7 +366,7 @@ class TestROSRS_Session < Test::Unit::TestCase
          xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
          xml:base="#{@rouri}"
       >
-        <rdf:Description rdf:about="test/file.txt">
+        <rdf:Description rdf:about="#{@res_txt}">
         <dct:title>Title 1</dct:title>
         <rdfs:seeAlso rdf:resource="http://example.org/test1" />
         </rdf:Description>
@@ -394,8 +394,8 @@ class TestROSRS_Session < Test::Unit::TestCase
       agr1a.each_statement { |s| log.debug("- #{s}") }
       log.debug "----"
     end
-    s1a = [@res_txt, DCTERMS.title, lit("Title 1")]
-    s1b = [@res_txt, RDFS.seeAlso,  uri("http://example.org/test1")]
+    s1a = [uri(@res_txt), DCTERMS.title, lit("Title 1")]
+    s1b = [uri(@res_txt), RDFS.seeAlso,  uri("http://example.org/test1")]
     assert_contains(s1a,agr1a)
     assert_contains(s1b,agr1a)
     # Retrieve merged annotations
@@ -408,9 +408,9 @@ class TestROSRS_Session < Test::Unit::TestCase
         xmlns:dct="http://purl.org/dc/terms/"
         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-        xml:base="#{rouri}"
+        xml:base="#{@rouri}"
       >
-        <rdf:Description rdf:about="test/file.txt">
+        <rdf:Description rdf:about="#{@res_txt}">
         <dct:title>Title 2</dct:title>
         <rdfs:seeAlso rdf:resource="http://example.org/test2" />
         </rdf:Description>
@@ -430,18 +430,18 @@ class TestROSRS_Session < Test::Unit::TestCase
     c,r,auri2,agr2a = @rosrs.getROAnnotationBody(annuri)
     assert_equal(c, 200)
     assert_equal(r, "OK")
-    s2a = [@res_txt, DCTERMS.title, lit("Title 2")]
-    s2b = [@res_txt, RDFS.seeAlso,  uri("http://example.org/test2")]
-    assert_not_contains(s1a,agr1a)
-    assert_not_contains(s1b,agr1a)
-    assert_contains(s2a,agr1a)
-    assert_contains(s2b,agr1a)
+    s2a = [uri(@res_txt), DCTERMS.title, lit("Title 2")]
+    s2b = [uri(@res_txt), RDFS.seeAlso,  uri("http://example.org/test2")]
+    assert_not_contains(s1a,agr2a)
+    assert_not_contains(s1b,agr2a)
+    assert_contains(s2a,agr2a)
+    assert_contains(s2b,agr2a)
     # Retrieve merged annotations
     agr2b = @rosrs.getROAnnotationGraph(@rouri, @res_txt)
-    assert_not_contains(s1a,agr1a)
-    assert_not_contains(s1b,agr1a)
-    assert_contains(s2a,agr1a)
-    assert_contains(s2b,agr1a)
+    assert_not_contains(s1a,agr2b)
+    assert_not_contains(s1b,agr2b)
+    assert_contains(s2a,agr2b)
+    assert_contains(s2b,agr2b)
     # Clean up
     c,r = deleteTestRO
   end

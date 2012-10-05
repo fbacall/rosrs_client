@@ -299,7 +299,7 @@ class ROSRS_Session
         "date"    => date
         }
     roinfotext = roinfo.to_json
-    c, r, h, d = doRequestRDF("POST", "",
+    c, r, h, u, d = doRequestRDF("POST", "",
       :body       => roinfotext,
       :headers    => reqheaders)
     log.debug("ROSRS_session.createRO: #{c} #{r} - #{d}")
@@ -530,7 +530,7 @@ class ROSRS_Session
         :ctype => "application/vnd.wf4ever.annotation",
         :body  => annotation)
     if code != 201
-        error("Error creating annotation #{code}, #{reason}, #{str(resuri)}")
+        error("Error creating annotation #{code}, #{reason}, #{resuri}")
     end
     return [code, reason, URI(headers["location"])]
   end
@@ -550,18 +550,40 @@ class ROSRS_Session
     # Create a resource annotation using an existing (possibly external) annotation body
     #
     # Returns: (code, reason, annuri)
+    error("Unimplemented")
   end
 
-  def updateROAnnotationInt(rouri, annuri, resuri, anngr)
+  def updateROAnnotationStub(rouri, stuburi, resuri, bodyuri)
+    # Update an indicated annotation for supplied resource using indiocated body
+    #
+    # Returns: [code, reason]
+    annotation = createAnnotationStubRDF(rouri, resuri, bodyuri)
+    code, reason, headers, data = doRequest("PUT", stuburi,
+        :ctype => "application/vnd.wf4ever.annotation",
+        :body  => annotation)
+    if code != 200
+        error("Error updating annotation #{code}, #{reason}, #{resuri}")
+    end
+    return [code, reason]
+  end
+
+  def updateROAnnotationInt(rouri, stuburi, resuri, anngr)
     # Update an annotation with a new internal annotation body
     #
-    # returns: (code, reason, bodyuri)
+    # returns: [code, reason, bodyuri]
+    code, reason, bodyuri = createROAnnotationBody(rouri, anngr)
+    if code != 201
+        error("Error creating annotation #{code}, #{reason}, #{resuri}")
+    end
+    code, reason = updateROAnnotationStub(rouri, stuburi, resuri, bodyuri)
+    return [code, reason, bodyuri]
   end
 
   def updateROAnnotationExt(rouri, annuri, bodyuri)
     # Update an annotation with an existing (possibly external) annotation body
     #
     # returns: (code, reason)
+    error("Unimplemented")
   end
 
   def getROAnnotationStubUris(rouri, resuri=nil)
@@ -621,8 +643,8 @@ class ROSRS_Session
     #
     # Returns graph of merged annotations
     agraph = RDF_Graph.new
-    getROAnnotationUris(rouri, resuri).each do |auri|
-      code, reason, headers, buri, bodytext = doRequestFollowRedirect(auri)
+    getROAnnotationStubUris(rouri, resuri).each do |auri|
+      code, reason, headers, buri, bodytext = doRequestFollowRedirect("GET", auri, {})
       if code == 200
         content_type = headers['content-type'].split(';', 2)[0].strip.downcase
         if ANNOTATION_CONTENT_TYPES.include?(content_type)
@@ -635,7 +657,7 @@ class ROSRS_Session
         log.warn("getROResourceAnnotationGraph: #{buri} read failure: #{code} #{reason}")
       end
     end
-    #~ return agraph
+    return agraph
   end
 
   def getROAnnotationBody(annuri)
@@ -653,6 +675,7 @@ class ROSRS_Session
     #~ (status, reason, headers, data) = self.doRequest(annuri,
         #~ method="DELETE")
     #~ return (status, reason)
+    error("Unimplemented")
   end
 
 end

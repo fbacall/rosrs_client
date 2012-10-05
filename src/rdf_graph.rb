@@ -25,7 +25,7 @@ class RDF_Graph
 
   attr_reader :log
 
-  def initialize(options)
+  def initialize(options={})
     # options: :uri =>    (URI to load),
     #          :data =>   (string to load)
     #          :format => (format of data)
