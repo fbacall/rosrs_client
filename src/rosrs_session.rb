@@ -300,11 +300,11 @@ class ROSRS_Session
         }
     roinfotext = roinfo.to_json
     c, r, h, u, d = doRequestRDF("POST", "",
-      :body       => roinfotext,
-      :headers    => reqheaders)
+        :body       => roinfotext,
+        :headers    => reqheaders)
     log.debug("ROSRS_session.createRO: #{c} #{r} - #{d}")
     if c == 201
-        return [c, r, h["location"], d]
+      return [c, r, h["location"], d]
     end
     if c == 409
       return [c, r, nil, d]
