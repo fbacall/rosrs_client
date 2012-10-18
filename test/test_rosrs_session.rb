@@ -24,9 +24,6 @@ if not defined?($log)
   end
 end
 
-require "./rosrs_session"
-require "./namespaces"
-
 RDFS = RDF::RDFS
 
 # Test configuration values - may be imported later

@@ -1,4 +1,4 @@
-ruby-http-session
+ROSRSClient
 =================
 
 Partial port of Python ROSRS_Session code to Ruby.
@@ -19,8 +19,6 @@ Partial port of Python ROSRS_Session code to Ruby.
 
 
 ## Contents
-
-@@TODO: add links
 
 * Contents
 * Package structure
