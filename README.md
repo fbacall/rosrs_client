@@ -70,12 +70,6 @@ Example:
         :accept => "application/rdf+xml"
         :headers    => reqheaders)
 
-Note that, when calling the `rosrs_session.doRequest` and similar methods, additional header fields are provided in a dictionary that is keyed by strings, not symbols; e.g.
-
-    reqheaders   = {
-        "slug"    => name
-        }
-
 
 ## A simple example
 

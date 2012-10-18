@@ -171,7 +171,11 @@ class ROSRS_Session
 
   def getRequestHeaders(options)
     if options[:headers]
-      reqheaders = options[:headers].clone
+      # Convert symbol keys to strings
+      reqheaders = options[:headers].inject({}) do |headers, (header, value)|
+        headers[header.to_s] = value
+        headers
+      end
     else
       reqheaders = {}
     end
