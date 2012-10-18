@@ -1,65 +1,28 @@
 # Test suite for ROSRS_Session
+require 'helper'
 
 
-require "test/unit"
-require "logger"
+class TestROSRSSession < Test::Unit::TestCase
 
-# Set up logger for this module
-# @@TODO connect to multi-module logging framework (log4r?)
-if not defined?($log)
-  loglevel = nil
-  loglevel = Logger::DEBUG
-  #loglevel = Logger::INFO
-  #loglevel = Logger::WARN
-  #loglevel = Logger::ERROR
-  #$log = Logger.new(STDOUT)
-  $log = Logger.new(__FILE__+".log")
-  $log.progname = "test_rosrs_session"
-  $log.level = Logger::ERROR
-  $log.formatter = proc { |sev, dat, prg, msg|
-      "#{prg}: #{msg}\n"
-    }
-  if loglevel
-    $log.level = loglevel
+  # Test configuration values - may be imported later
+  #
+  # @@TODO: create separate module for test configuration (RODL, etc)
+  #
+  class Config
+    def self.rosrs_api_uri; "http://sandbox.wf4ever-project.org/rodl/ROs/"; end
+    def self.authorization; "47d5423c-b507-4e1c-8"; end
+    def self.test_ro_name;  "TestSessionRO_ruby"; end
+    def self.test_ro_path; test_ro_name+"/"; end
+    def self.test_ro_uri;   rosrs_api_uri+test_ro_path; end
+    def self.test_res1_rel; "subdir/res1.txt"; end
+    def self.test_res2_rel; "subdir/res2.rdf"; end
+    def self.test_res1_uri; test_ro_uri+test_res1_rel; end
+    def self.test_res2_uri; test_ro_uri+test_res2_rel; end
   end
-end
-
-RDFS = RDF::RDFS
-
-# Test configuration values - may be imported later
-#
-# @@TODO: create separate module for test configuration (RODL, etc)
-#
-class TestConfig
-  attr_accessor :rosrs_api_uri, :authorization
-  attr_accessor :test_ro_name, :test_ro_path, :test_ro_uri
-  attr_accessor :test_res1_rel, :test_res2_rel
-  attr_accessor :test_res1_uri, :test_res2_uri
-
-  def initialize
-    @rosrs_api_uri  = "http://sandbox.wf4ever-project.org/rodl/ROs/"
-    @authorization  = "47d5423c-b507-4e1c-8"
-    @test_ro_name   = "TestSessionRO_ruby"
-    @test_ro_path   = test_ro_name+"/"
-    @test_ro_uri    = rosrs_api_uri+test_ro_path
-    @test_res1_rel  = "subdir/res1.txt"
-    @test_res2_rel  = "subdir/res2.rdf"
-    @test_res1_uri  = test_ro_uri+test_res1_rel
-    @test_res2_uri  = test_ro_uri+test_res2_rel
-  end
-
-end
-
-class TestROSRS_Session < Test::Unit::TestCase
-
-  attr :log
-
-  Config = TestConfig.new
 
   def setup
-    @log   = $log
     @rouri = nil
-    @rosrs = ROSRS_Session.new(Config.rosrs_api_uri, Config.authorization)
+    @rosrs = ROSRSSession.new(Config.rosrs_api_uri, Config.authorization)
   end
 
   def teardown
@@ -82,15 +45,11 @@ class TestROSRS_Session < Test::Unit::TestCase
   end
 
   def assert_contains(triple, graph)
-    #~ log.debug("assert_contains #{triple}")
-    #~ graph.each_statement { |stmt| log.debug("- #{stmt}") }
     assert(graph.match?(stmt(triple)), "Expected triple #{triple}")
   end
 
   def assert_not_contains(triple, graph)
-    #~ log.debug("assert_contains #{triple}")
-    #~ graph.each_statement { |stmt| log.debug("- #{stmt}") }
-    assert((not graph.match?(stmt(triple))), "Unexpected triple #{triple}")
+    assert(!graph.match?(stmt(triple)), "Unexpected triple #{triple}")
   end
 
   def assert_includes(item, list)
@@ -98,13 +57,13 @@ class TestROSRS_Session < Test::Unit::TestCase
   end
 
   def assert_not_includes(item, list)
-    assert((not list.include?(item)), "Unexpected item #{item}")
+    assert(!list.include?(item), "Unexpected item #{item}")
   end
 
   def createTestRO
     c, r = @rosrs.deleteRO(Config.test_ro_uri)
     c,r,u,m = @rosrs.createRO(Config.test_ro_name,
-        "Test RO for ROSRS_Session", "TestROSRS_Session.py", "2012-09-28")
+        "Test RO for ROSRSSession", "TestROSRS_Session.py", "2012-09-28")
     assert_equal(c, 201)
     @rouri = u
     return [c,r,u,m]
@@ -162,7 +121,7 @@ class TestROSRS_Session < Test::Unit::TestCase
                  ORE.Aggregation
                  )
     assert_equal(RDF::URI("http://www.w3.org/2000/01/rdf-schema#seeAlso"),
-                 RDFS.seeAlso
+                 RDF::RDFS.seeAlso
                  )
   end
 
@@ -210,7 +169,7 @@ class TestROSRS_Session < Test::Unit::TestCase
           </ex:Resource>
         </rdf:RDF>
         )
-    g  = RDF_Graph.new(:data => b)
+    g  = RDFGraph.new(:data => b)
     b1 = g.serialize(format=:ntriples)
     r1 = %r{<http:/example\.com/res/1> <http://example\.org/foo> <http://example\.com/res/1> \.}
     r2 = %r{<http:/example\.com/res/1> <http://example\.org/bar> "Literal property" \.}
@@ -230,17 +189,15 @@ class TestROSRS_Session < Test::Unit::TestCase
           </ex:Resource>
         </rdf:RDF>
         )
-    g  = RDF_Graph.new(:data => b)
+    g  = RDFGraph.new(:data => b)
     stmts = []
     g.query([nil, nil, nil]) { |s| stmts << s }
-    log.debug("test_queryGraph stmts: #{stmts}")
     s1 = stmt([uri("http:/example.com/res/1"),uri("http://example.org/foo"),uri("http://example.com/res/1")])
     s2 = stmt([uri("http:/example.com/res/1"),uri("http://example.org/bar"),lit("Literal property")])
     assert_includes(s1, stmts)
     assert_includes(s2, stmts)
     stmts = []
     g.query(:object => uri("http://example.com/res/1")) { |s| stmts << s }
-    log.debug("test_queryGraph stmts: #{stmts}")
     assert_includes(s1, stmts)
     assert_not_includes(s2, stmts)
   end
@@ -282,7 +239,7 @@ class TestROSRS_Session < Test::Unit::TestCase
     assert_equal("No Content", r)
   end
 
-  def test_getROManifest()
+  def test_getROManifest
     # [manifesturi, manifest] = getROManifest(rouri)
     c,r,u,m = createTestRO
     assert_equal(201, c)
@@ -326,7 +283,7 @@ class TestROSRS_Session < Test::Unit::TestCase
           </ex:Resource>
         </rdf:RDF>
         )
-    g = RDF_Graph.new(:data => b)
+    g = RDFGraph.new(:data => b)
     # Create an annotation body from a supplied annnotation graph.
     # Params:  (rouri, anngr)
     # Returns: (status, reason, bodyuri)
@@ -369,7 +326,7 @@ class TestROSRS_Session < Test::Unit::TestCase
         </rdf:Description>
       </rdf:RDF>
       )
-    agraph1 = RDF_Graph.new(:data => annbody1, :format => :xml)
+    agraph1 = RDFGraph.new(:data => annbody1, :format => :xml)
     c,r,annuri,bodyuri1 = @rosrs.createROAnnotationInt(
       @rouri, @res_txt, agraph1)
     assert_equal(201, c)
@@ -386,13 +343,8 @@ class TestROSRS_Session < Test::Unit::TestCase
     # The following test fails, due to a temp[orary redirect from the annotation
     # body URI in the stub to the actual URI used to retrieve the body:
     # assert_includes(auri1, buris1)
-    if log.debug?
-      log.debug "- Annotation statements"
-      agr1a.each_statement { |s| log.debug("- #{s}") }
-      log.debug "----"
-    end
     s1a = [uri(@res_txt), DCTERMS.title, lit("Title 1")]
-    s1b = [uri(@res_txt), RDFS.seeAlso,  uri("http://example.org/test1")]
+    s1b = [uri(@res_txt), RDF::RDFS.seeAlso,  uri("http://example.org/test1")]
     assert_contains(s1a,agr1a)
     assert_contains(s1b,agr1a)
     # Retrieve merged annotations
@@ -413,7 +365,7 @@ class TestROSRS_Session < Test::Unit::TestCase
         </rdf:Description>
       </rdf:RDF>
       )
-    agraph2 = RDF_Graph.new(:data => annbody2, :format => :xml)
+    agraph2 = RDFGraph.new(:data => annbody2, :format => :xml)
     c,r,bodyuri2 = @rosrs.updateROAnnotationInt(
       @rouri, annuri, @res_txt, agraph2)
     assert_equal(c, 200)
@@ -428,7 +380,7 @@ class TestROSRS_Session < Test::Unit::TestCase
     assert_equal(c, 200)
     assert_equal(r, "OK")
     s2a = [uri(@res_txt), DCTERMS.title, lit("Title 2")]
-    s2b = [uri(@res_txt), RDFS.seeAlso,  uri("http://example.org/test2")]
+    s2b = [uri(@res_txt), RDF::RDFS.seeAlso,  uri("http://example.org/test2")]
     assert_not_contains(s1a,agr2a)
     assert_not_contains(s1b,agr2a)
     assert_contains(s2a,agr2a)
@@ -442,13 +394,5 @@ class TestROSRS_Session < Test::Unit::TestCase
     # Clean up
     c,r = deleteTestRO
   end
-
-  #~ def test_zzzzzz
-    #~ # [code, reason, stuburi] = zzzzzz(rouri, resuri, bodyuri)
-    #~ c,r,u,m = createTestRO
-    #~ assert_equal(201, c)
-    #~ # ...
-    #~ c,r = deleteTestRO
-  #~ end
 
  end
