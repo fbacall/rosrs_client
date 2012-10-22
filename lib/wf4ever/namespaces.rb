@@ -1,74 +1,46 @@
-require 'rubygems'
-require 'rdf'
-require 'rdf/vocab'
+#ao      = "http://purl.org/ao/"
+#ore     = "http://www.openarchives.org/ore/terms/"
+#ro      = "http://purl.org/wf4ever/ro#"
+#roevo   = "http://purl.org/wf4ever/roevo#"
+#wfprov  = "http://purl.org/wf4ever/wfprov#"
+#wfdesc  = "http://purl.org/wf4ever/wfdesc#"
+#roterms = "http://ro.example.org/ro/terms/"
 
-class Namespace
-  def initialize(prefix, base, memberlist)
-    @prefix   = prefix
-    @base_uri = URI(base)
-    @members  = {}
-    memberlist.each do |m|
-      @members[m.to_sym] = RDF::URI(@base_uri.to_s+m)
-      Namespace.send(:define_method, m) do
-        return @members[m.to_sym]
-      end
-    end
+module RDF
+
+  class AO < Vocabulary("http://purl.org/ao/")
+    property :Annotation
+    property :body
+    property :annotatesResource
   end
 
-  def [](name)
-    return @members[name]
+  class ORE < Vocabulary("http://www.openarchives.org/ore/terms/")
+    property :Aggregation
+    property :AggregatedResource
+    property :Proxy
+    property :aggregates
+    property :proxyFor
+    property :proxyIn
+    property :isDescribedBy
   end
 
+  class RO < Vocabulary("http://purl.org/wf4ever/ro#")
+    property :ResearchObject
+    property :AggregatedAnnotation
+    property :annotatesAggregatedResource
+    property :FolderEntry
+    property :Folder
+    property :Resource
+    property :entryName
+  end
+
+  class ROEVO < Vocabulary("http://purl.org/wf4ever/roevo#")
+    property :LiveRO
+  end
+
+  class ROTERMS < Vocabulary("http://ro.example.org/ro/terms/")
+    property :note
+    property :resource
+    property :defaultBase
+  end
 end
-
-ao      = "http://purl.org/ao/"
-ore     = "http://www.openarchives.org/ore/terms/"
-foaf    = "http://xmlns.com/foaf/0.1/"
-ro      = "http://purl.org/wf4ever/ro#"
-roevo   = "http://purl.org/wf4ever/roevo#"
-wfprov  = "http://purl.org/wf4ever/wfprov#"
-wfdesc  = "http://purl.org/wf4ever/wfdesc#"
-dcterms = "http://purl.org/dc/terms/"
-roterms = "http://ro.example.org/ro/terms/"
-
-ORE     = Namespace.new("ORE", ore,
-            [ "Aggregation", "AggregatedResource", "Proxy",
-              "aggregates", "proxyFor", "proxyIn",
-              "isDescribedBy"
-            ])
-AO      = Namespace.new("AO", ao,
-            [ "Annotation",
-              "body", "annotatesResource"
-            ])
-RO      = Namespace.new("RO", ro,
-            [ "ResearchObject", "AggregatedAnnotation",
-              "annotatesAggregatedResource" # @@TODO: deprecated
-            ])
-ROEVO   = Namespace.new("ROEVO",  roevo,
-            [ "LiveRO"
-            ])
-DCTERMS = Namespace.new("DCTERMS", dcterms,
-            [ "identifier", "description", "title",
-              "creator", "created", "subject",
-              "format", "type"
-            ])
-ROTERMS = Namespace.new("ROTERMS", roterms,
-            [ "note", "resource", "defaultBase"
-            ])
-
-#RDF     = RDF::RDF
-RDF__   = Namespace.new("RDF", "...",
-            [ "Seq", "Bag", "Alt", "Statement", "Property",
-              "XMLLiteral", "List", "PlainLiteral",
-              "subject", "predicate", "object",
-              "type", "value", "first", "rest", "nil"
-            ])
-
-#RDFS    = RDF::RDFS
-RDFS__  = Namespace.new("RDFS", "...",
-            [ "Resource", "Class", "Literal", "Datatype",
-              "subClassOf", "subPropertyOf",
-              "comment", "label", "domain", "range", "seeAlso", "isDefinedBy",
-              "Container", "ContainerMembershipProperty",
-              "member",
-            ])
