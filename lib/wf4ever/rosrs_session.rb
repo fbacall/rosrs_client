@@ -111,6 +111,9 @@ class ROSRSSession
   # Return [code, reason(text), response headers, response body]
   #
   def do_request(method, uripath, options = {})
+
+    req = nil
+
     case method
     when 'GET'
       req = Net::HTTP::Get.new(get_request_path(uripath))
