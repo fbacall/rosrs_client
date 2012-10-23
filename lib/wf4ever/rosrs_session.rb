@@ -43,71 +43,14 @@ class ROSRSSession
   # -------
 
   ##
-  # Helper function returns list of delimited values in a string,
-  # where delimiters in quotes are protected.
-  #
-  # sep is string of separator
-  # lq is string of opening quotes for strings within which separators are not recognized
-  # rq is string of corresponding closing quotes
-  def split_values(txt, sep=",", lq=%q('"<), rq=%q('">))
-    result = []
-    cursor = 0
-    begseg = cursor
-    while cursor < txt.length do
-      if lq.include?(txt[cursor])
-        # Skip quoted or bracketed string
-        eq = rq[lq.index(txt[cursor])]  # End quote/bracket character
-        cursor += 1
-        while cursor < txt.length and txt[cursor] != eq do
-          if txt[cursor].chr == '\\'
-            cursor += 1 # skip '\' quoted-pair
-          end
-          cursor += 1
-        end
-        if cursor < txt.length
-          cursor += 1 # Skip closing quote/bracket
-        end
-      elsif sep.include?(txt[cursor])
-        result << txt.slice(begseg...cursor)
-        cursor += 1
-        begseg = cursor
-      else
-        cursor += 1
-      end
-    end
-    # append final segment
-    result << txt.slice(begseg...cursor)
-    result
-  end
-
-  ##
   # Parse links from headers; returns a hash indexed by link relation
   # Headerlist is a hash indexed by header field name (see HTTP:Response)
-  def parse_links(headerlist)
+  def parse_links(headers)
     links = {}
-    headerlist.each do |h,v|
-      #puts "h #{h} = #{v}"
-      if h.downcase == "link"
-        #puts "v #{v}"
-        split_values(v, ",").each do |linkval|
-          #puts "linkval #{linkval}"
-          linkparts = split_values(linkval, ";")
-          linkmatch = /\s*<([^>]*)>\s*/.match(linkparts[0])
-          if linkmatch
-            linkuri = linkmatch[1]
-            #puts "linkuri #{linkuri}"
-            linkparts.slice(1..-1).each do |linkparam|
-              #puts "linkparam #{linkparam}"
-              parammatch = /\s*rel\s*=\s*"?(.*?)"?\s*$/.match(linkparam)
-              if parammatch
-                linkrel = parammatch[1]
-                #puts "linkrel #{linkrel}"
-                links[linkrel] = URI(linkuri)
-              end
-            end
-          end
-        end
-      end
+    link_header = headers["link"] || headers["Link"]
+    link_header.split(",").each do |link|
+      matches = link.strip.match(/<([^>]*)>\s*;.*rel\s*=\s*"?([^;"]*)"?/)
+      links[matches[2]] = URI(matches[1]) if matches
     end
     links
   end
@@ -160,12 +103,11 @@ class ROSRSSession
   #
   # method        HTTP method name
   # uripath       is reference or URI of resource (see get_request_path)
-  # options: {
-  #   body    => body to accompany request
-  #   ctype   => content type of supplied body
-  #   accept  => accept co ntent types for response
-  #   headers => additional headers for request
-  #   }
+  # options:
+  # [:body]    body to accompany request
+  # [:ctype]   content type of supplied body
+  # [:accept]  accept content types for response
+  # [:headers] additional headers for request
   # Return [code, reason(text), response headers, response body]
   #
   def do_request(method, uripath, options = {})
@@ -332,14 +274,13 @@ class ROSRSSession
   ##
   # Retrieve resource from RO
   #
-  # resuriref     is relative reference or URI of resource
-  # ro_uri         is URI of RO, used as base for relative reference
+  # resuriref    is relative reference or URI of resource
+  # ro_uri       is URI of RO, used as base for relative reference
   # options:
-  #   accept  => (content type)
-  #   headers => (request headers)
-  #
+  # [:accept]    content type
+  # [:headers]   additional headers for request
   # Returns:
-  #   [code, reason, headers, data], where code is 200 or 404
+  # [code, reason, headers, data], where code is 200 or 404
   def get_resource(resuriref, ro_uri=nil, options={})
     if ro_uri
       resuriref = URI.join(ro_uri.to_s, resuriref.to_s)
@@ -357,10 +298,10 @@ class ROSRSSession
   # resource_uri    is relative reference or URI of resource
   # ro_uri     is URI of RO, used as base for relative reference
   # options:
-  #   headers => (request headers)
+  # [:headers]   additional headers for request
   #
   # Returns:
-  #   [code, reason, headers, uri, data], where code is 200 or 404
+  # [code, reason, headers, uri, data], where code is 200 or 404
   #
   # If code isreturned as 200, data is returned as an RDFGraph value
   def get_resource_rdf(resource_uri, ro_uri=nil, options={})
@@ -576,13 +517,13 @@ class ROSRSSession
     [code, reason, uri, annotation_graph]
   end
 
+  ##
+  # Remove annotation at given annotation URI
+  # UNIMPLEMENTED
+  #
+  # Returns: (code, reason)
   def remove_annotation(ro_uri, annotation_uri)
-    # Remove annotation at given annotation URI
-    #
-    # Returns: (code, reason)
-    #~ (status, reason, headers, data) = self.do_request(annotation_uri,
-        #~ method="DELETE")
-    #~ return (status, reason)
+
     error("Unimplemented")
   end
 

@@ -125,37 +125,20 @@ class TestROSRSSession < Test::Unit::TestCase
                  )
   end
 
-  def test_SplitValues
-    assert_equal(['a','b','c'],
-                 @rosrs.split_values("a,b,c"))
-    assert_equal(['a','"b,c"','d'],
-                 @rosrs.split_values('a,"b,c",d'))
-    assert_equal(['a',' "b, c\\", c1"',' d'],
-                 @rosrs.split_values('a, "b, c\\", c1", d'))
-    assert_equal(['a,"b,c",d'],
-                 @rosrs.split_values('a,"b,c",d', ";"))
-    assert_equal(['a','"b;c"','d'],
-                 @rosrs.split_values('a;"b;c";d', ";"))
-    assert_equal(['a','<b;c>','d'],
-                 @rosrs.split_values('a;<b;c>;d', ";"))
-    assert_equal(['"a;b"','(c;d)','e'],
-                 @rosrs.split_values('"a;b";(c;d);e', ";", '"(', '")'))
-  end
-
   def test_ParseLinks
-    links = [ ['Link', '<http://example.org/foo>; rel=foo'],
-              ['Link', ' <http://example.org/bar> ; rel = bar '],
-              ['Link', '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'],
-              ['Link', ' <http://example.org/fie> ; par = fie '],
-              ['Link', ' <http://example.org/fum> ; rel = "http://example.org/rel/fum" '],
-              ['Link', ' <http://example.org/fas;far> ; rel = "http://example.org/rel/fas" '],
-            ]
-    assert_equal(URI('http://example.org/foo'), @rosrs.parse_links(links)['foo'])
-    assert_equal(URI('http://example.org/bar'), @rosrs.parse_links(links)['bar'])
-    assert_equal(URI('http://example.org/bas'), @rosrs.parse_links(links)['bas'])
-    assert_equal(URI('http://example.org/bat'), @rosrs.parse_links(links)['bat'])
-    assert_equal(URI('http://example.org/fum'), @rosrs.parse_links(links)['http://example.org/rel/fum'])
-    assert_equal(URI('http://example.org/fas;far'), @rosrs.parse_links(links)['http://example.org/rel/fas'])
+    assert_equal(URI('http://example.org/foo'),
+                 @rosrs.parse_links({'Link' => '<http://example.org/foo>; rel=foo'})['foo'])
+    assert_equal({},@rosrs.parse_links({'link' => ' <http://example.org/fie> ; par = fie '}))
+    assert_equal(URI('http://example.org/bar'),
+                 @rosrs.parse_links({'link' => ' <http://example.org/bar> ; rel = bar '})['bar'])
+    assert_equal(URI('http://example.org/bas'),
+                 @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bas'])
+    assert_equal(URI('http://example.org/bat'),
+                 @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bat'])
+    assert_equal(URI('http://example.org/fum'),
+                 @rosrs.parse_links({'Link' => ' <http://example.org/fum> ; rel = "http://example.org/rel/fum" '})['http://example.org/rel/fum'])
+    assert_equal(URI('http://example.org/fas;far'),
+                 @rosrs.parse_links({'link' => ' <http://example.org/fas;far> ; rel = "http://example.org/rel/fas" '})['http://example.org/rel/fas'])
   end
 
   def test_createSerializeGraph

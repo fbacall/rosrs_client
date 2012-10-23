@@ -1,12 +1,4 @@
-#ao      = "http://purl.org/ao/"
-#ore     = "http://www.openarchives.org/ore/terms/"
-#ro      = "http://purl.org/wf4ever/ro#"
-#roevo   = "http://purl.org/wf4ever/roevo#"
-#wfprov  = "http://purl.org/wf4ever/wfprov#"
-#wfdesc  = "http://purl.org/wf4ever/wfdesc#"
-#roterms = "http://ro.example.org/ro/terms/"
-
-module RDF
+module RDF #:nodoc:
 
   class AO < Vocabulary("http://purl.org/ao/")
     # Declaring these might not be necessary
