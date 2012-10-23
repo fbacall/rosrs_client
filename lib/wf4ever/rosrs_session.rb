@@ -42,6 +42,8 @@ class ROSRSSession
   # Helpers
   # -------
 
+  private
+
   ##
   # Parse links from headers; returns a hash indexed by link relation
   # Headerlist is a hash indexed by header field name (see HTTP:Response)
@@ -176,6 +178,8 @@ class ROSRSSession
     end
     [code, reason, headers, uripath, data]
   end
+
+  public
 
   # ---------------
   # RO manipulation

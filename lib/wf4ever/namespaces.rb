@@ -1,4 +1,6 @@
-module RDF #:nodoc:
+#:nodoc: all
+
+module RDF
 
   class AO < Vocabulary("http://purl.org/ao/")
     # Declaring these might not be necessary
