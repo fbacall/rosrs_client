@@ -1,10 +1,10 @@
 class FolderEntry
 
-  attr_reader :name, :path, :parent
+  attr_reader :name, :uri, :parent
 
-  def initialize(name, path, parent)
+  def initialize(name, uri, parent)
     @name = name
-    @path = path
+    @uri = uri
     @parent = parent
   end
 
@@ -16,10 +16,10 @@ end
 
 class Folder < FolderEntry
 
-  def initialize(name, path, parent, resource_map_uri, eager_load = false)
-    super(name, path, parent)
-    @resource_map_uri = resource_map_uri
+  def initialize(name, uri, parent, rosrs_session, eager_load = false)
+    super(name, uri, parent)
     @loaded = false
+    @session = rosrs_session
     load! if (@eager_load = eager_load)
   end
 
@@ -68,7 +68,7 @@ class Folder < FolderEntry
     @contents = []
 
     # Load folder contents
-    graph = RDF::Graph.load(resource_map_uri)
+    code, reason, headers, uripath, graph = @session.do_request_rdf("GET", uri)
 
     query = RDF::Query.new do
       pattern [:folder_entry, RDF.type,  RDF::RO.FolderEntry]

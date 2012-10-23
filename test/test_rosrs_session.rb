@@ -60,7 +60,7 @@ class TestROSRSSession < Test::Unit::TestCase
     assert(!list.include?(item), "Unexpected item #{item}")
   end
 
-  def create_test_ro
+  def create_test_research_object
     c, r = @rosrs.delete_research_object(Config.test_ro_uri)
     c,r,u,m = @rosrs.create_research_object(Config.test_ro_name,
         "Test RO for ROSRSSession", "TestROSRS_Session.py", "2012-09-28")
@@ -69,7 +69,7 @@ class TestROSRSSession < Test::Unit::TestCase
     [c,r,u,m]
   end
 
-  def populate_test_ro
+  def populate_test_research_object
     # Add plain text resource
     res1_body = %q(#{test_res1_uri}
         resource body line 2
@@ -104,7 +104,7 @@ class TestROSRSSession < Test::Unit::TestCase
     # @@TODO Add external resource
   end
 
-  def delete_test_ro
+  def delete_test_research_object
     c, r = @rosrs.delete_research_object(@rouri)
     [c, r]
   end
@@ -180,7 +180,7 @@ class TestROSRSSession < Test::Unit::TestCase
   end
 
   def test_http_simple_get
-    c,r,u,m = create_test_ro
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
     c,r,h,b = @rosrs.do_request("GET", @rouri,
       {:accept => "application/rdf+xml"})
@@ -188,11 +188,11 @@ class TestROSRSSession < Test::Unit::TestCase
     assert_equal("See Other", r)
     assert_equal("application/rdf+xml", h["content-type"])
     assert_equal("", b)
-    c,r = delete_test_ro
+    c,r = delete_test_research_object
   end
 
   def test_http_redirected_get
-    c,r,u,m = create_test_ro
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
     c,r,h,u,b = @rosrs.do_request_follow_redirect("GET", @rouri,
         {:accept => "application/rdf+xml"})
@@ -201,24 +201,24 @@ class TestROSRSSession < Test::Unit::TestCase
     assert_equal("application/rdf+xml", h["content-type"])
     assert_equal(Config.test_ro_uri+".ro/manifest.rdf", u.to_s)
     #assert_match(???, b)
-    c,r = delete_test_ro
+    c,r = delete_test_research_object
   end
 
-  def test_create_test_ro
-    c,r,u,m = create_test_ro
+  def test_create_research_object
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
     assert_equal("Created", r)
     assert_equal(Config.test_ro_uri, u)
     s = stmt([uri(Config.test_ro_uri), RDF.type, RDF::RO.ResearchObject])
     assert_contains(s, m)
-    c,r = delete_test_ro
+    c,r = delete_test_research_object
     assert_equal(204, c)
     assert_equal("No Content", r)
   end
 
   def test_get_manifest
     # [manifesturi, manifest] = get_ro_manifest(rouri)
-    c,r,u,m = create_test_ro
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
     # Get manifest
     manifesturi, manifest = @rosrs.get_manifest(u)
@@ -231,7 +231,7 @@ class TestROSRSSession < Test::Unit::TestCase
   end
 
   def test_aggregate_internal_resource
-    c,r,u,m = create_test_ro
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
     body    = "test_aggregate_internal_resource resource body\n"
     options = { :body => body, :ctype => "text/plain" }
@@ -243,11 +243,11 @@ class TestROSRSSession < Test::Unit::TestCase
     puri_act = puri.to_s.slice(0...puri_exp.length)
     assert_equal(puri_exp, puri_act)
     assert_equal(Config.test_ro_uri+"test_aggregate_internal_resource", ruri.to_s)
-    c,r = delete_test_ro
+    c,r = delete_test_research_object
   end
 
   def test_create_annotation_body
-    c,r,u,m = create_test_ro
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
     b = %q(
         <rdf:RDF
@@ -268,26 +268,26 @@ class TestROSRSSession < Test::Unit::TestCase
     assert_equal("Created", r)
     assert_match(%r(http://sandbox.wf4ever-project.org/rodl/ROs/TestSessionRO_ruby/), u.to_s)
     #assert_equal(nil, u)
-    c,r = delete_test_ro
+    c,r = delete_test_research_object
   end
 
   def test_create_annotation_stub
     # [code, reason, stuburi] = create_annotation_stub(rouri, resuri, bodyuri)
-    c,r,u,m = create_test_ro
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
     c,r,u = @rosrs.create_annotation_stub(@rouri,
         "http://example.org/resource", "http://example.org/body")
     assert_equal(201, c)
     assert_equal("Created", r)
     assert_match(%r(http://sandbox.wf4ever-project.org/rodl/ROs/TestSessionRO_ruby/\.ro/), u.to_s)
-    c,r = delete_test_ro
+    c,r = delete_test_research_object
   end
 
   def test_create_internal_annotation
     # [code, reason, annuri, bodyuri] = create_internal_annotation(rouri, resuri, anngr)
-    c,r,u,m = create_test_ro
+    c,r,u,m = create_test_research_object
     assert_equal(201, c)
-    populate_test_ro
+    populate_test_research_object
     # Create internal annotation on @res_txt
     annbody1 = %Q(<?xml version="1.0" encoding="UTF-8"?>
       <rdf:RDF
@@ -368,7 +368,7 @@ class TestROSRSSession < Test::Unit::TestCase
     assert_contains(s2a,agr2b)
     assert_contains(s2b,agr2b)
     # Clean up
-    c,r = delete_test_ro
+    c,r = delete_test_research_object
   end
 
  end

@@ -159,7 +159,7 @@ class ROSRSSession
   # Returns the manifest as a graph if the request is successful
   # otherwise returns the raw response data.
   def do_request_rdf(method, uripath, options = {})
-    options[:accept] = "application/rdf+xml"
+    options[:accept] ||= "application/rdf+xml"
     code, reason, headers, uripath, data = do_request_follow_redirect(method, uripath, options)
     if code >= 200 and code < 300
       if headers["content-type"].downcase == "application/rdf+xml"
@@ -550,9 +550,9 @@ class ROSRSSession
 
   ##
   # Returns a Folder object from the given resource map URI.
-  def get_folder(folder_resource_map_uri, options = {})
-    folder_name = options[:name] || URI(folder_resource_map_uri).path[1..-1].split('.',2)[0]
-    Folder.new(folder_name, options[:path], folder_resource_map_uri, options[:parent], options[:eager_load])
+  def get_folder(folder_uri, options = {})
+    folder_name = options[:name] || URI(folder_uri).path[1..-1].split('.',2)[0]
+    Folder.new(folder_name, folder_uri, options[:parent], self, options[:eager_load])
   end
 
   ##
@@ -571,23 +571,28 @@ class ROSRSSession
   #                      {:uri => 'http://www.myexperiment.org/workflows/7'}]
   #   create_folder('ros/new_ro/', 'example_data', folder_contents)
   #
-  # Returns [uri, folder_contents, folder_description_location]
+  # Returns [uri, folder_contents]
   #
   # +uri+:: The URI of the created folder
   # +folder_contents+:: A list of the folder's contents. In the same form as +contents+.
-  # +folder_description_location+:: The URI of the document which describes the created folder.
   def create_folder(ro_uri, name, contents)
     code, reason, headers, uripath, graph = do_request_rdf("POST", ro_uri,
         :body       => create_folder_description(contents),
         :headers    => {"Slug" => name, "Content-Type" => 'application/vnd.wf4ever.folder'})
 
     if code == 201
-      folder_contents = parse_folder_description(graph)
-      folder_description_location = parse_links(headers)[RDF::ORE.isDescribedBy.to_s]
-      [headers["location"], folder_contents, folder_description_location]
+      [parse_links(headers)[RDF::ORE.proxyFor.to_s], parse_folder_description(graph)]
     else
       error("Error creating folder: #{code} #{reason}")
     end
+  end
+
+  def update_folder(ro_uri, folder_name)
+
+  end
+
+  def delete_folder(ro_uri, folder_name)
+
   end
 
   private
