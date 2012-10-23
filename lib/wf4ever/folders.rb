@@ -23,6 +23,10 @@ class Folder < FolderEntry
     load! if (@eager_load = eager_load)
   end
 
+  def child(child_name)
+    contents.select {|child| child.name == child_name}.first
+  end
+
   def folder?
     true
   end

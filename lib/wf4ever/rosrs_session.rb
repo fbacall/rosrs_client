@@ -199,7 +199,7 @@ class ROSRSSession
     elsif code == 409
       [code, reason, nil, data]
     else
-      error("Error creating RO: : #{code} #{reason}")
+      error("Error creating RO: #{code} #{reason}")
     end
   end
 
@@ -536,7 +536,7 @@ class ROSRSSession
   def get_root_folders(ro_uri, options = {})
     uri, data = get_manifest(ro_uri)
     query = RDF::Query.new do
-      pattern [:folder, RDF.type,  RDF::RO.Folder]
+      pattern [:folder, RDF.type,  RDF::RO.RootFolder]
       pattern [:folder, RDF::ORE.isDescribedBy, :folder_resource_map]
     end
 
@@ -560,6 +560,80 @@ class ROSRSSession
     options[:eager_load] = true
     get_root_folders(ro_uri, options)
   end
+
+  ##
+  # +contents+ is an Array containing Hash elements, which must consist of a :uri and an optional :name.
+  # Example:
+  #   folder_contents = [{:name => 'test_data.txt', :uri => 'http://www.example.com/ro/file1.txt'},
+  #                      {:uri => 'http://www.myexperiment.org/workflows/7'}]
+  #   create_folder('ros/new_ro/', 'example_data', folder_contents)
+  #
+  # Returns [uri, folder_contents, folder_description_location]
+  #
+  # +uri+:: The URI of the created folder
+  # +folder_contents+:: A list of the folder's contents. In the same form as +contents+.
+  # +folder_description_location+:: The URI of the document which describes the created folder.
+  def create_folder(ro_uri, name, contents)
+    code, reason, headers, uripath, graph = do_request_rdf("POST", ro_uri,
+        :body       => create_folder_description(contents),
+        :headers    => {"Slug" => name, "Content-Type" => 'application/vnd.wf4ever.folder'})
+
+    if code == 201
+      folder_contents = parse_folder_description(graph)
+      folder_description_location = parse_links(headers)[RDF::ORE.isDescribedBy.to_s]
+      [headers["location"], folder_contents, folder_description_location]
+    else
+      error("Error creating folder: #{code} #{reason}")
+    end
+  end
+
+  private
+
+  ##
+  # Takes +contents+ ,an Array containing Hash elements, which must consist of a :uri and an optional :name,
+  # and returns an RDF description of the folder contents.
+  def create_folder_description(contents)
+    body = %(
+      <rdf:RDF
+        xmlns:ore="#{RDF::ORE.to_uri.to_s}"
+        xmlns:rdf="#{RDF.to_uri.to_s}"
+        xmlns:ro="#{RDF::RO.to_uri.to_s}" >
+        <ro:Folder>
+          #{contents.collect {|r| "<ore:aggregates rdf:resource=\"#{r[:uri]}\" />" }.join("\n")}
+        </ro:Folder>
+    )
+    contents.each do |r|
+      if r[:name]
+        body << %(
+          <ro:FolderEntry>
+            <ro:entryName>#{r[:name]}</ro:entryName>
+            <ore:proxyFor rdf:resource="#{r[:uri]}" />
+          </ro:FolderEntry>
+        )
+      end
+    end
+    body << %(
+      </rdf:RDF>
+    )
+
+    body
+  end
+
+  ##
+  # Takes an ro:Folder RDF description and returns an Array of Hashes, containing the :name and :uri for
+  # each FolderEntry.
+  def parse_folder_description(folder_description)
+    query = RDF::Query.new do
+      pattern [:folder_entry, RDF.type, RDF.Description]
+      pattern [:folder_entry, RDF::RO.entryName, :name]
+      pattern [:folder_entry, RDF::ORE.proxyFor, :target]
+    end
+
+    folder_description.query(query).collect {|e| {:name => e.name.to_s, :uri => e.target.to_s}}
+  end
+
+  public
+
 
 
 end
