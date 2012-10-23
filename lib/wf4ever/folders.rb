@@ -8,6 +8,10 @@ class FolderEntry
     @parent = parent
   end
 
+  def folder?
+    false
+  end
+
 end
 
 class Folder < FolderEntry
@@ -17,6 +21,10 @@ class Folder < FolderEntry
     @resource_map_uri = resource_map_uri
     @loaded = false
     load! if (@eager_load = eager_load)
+  end
+
+  def folder?
+    true
   end
 
   def eager_load?
@@ -36,31 +44,45 @@ class Folder < FolderEntry
     contents.size
   end
 
-  # Get folder contents from resource map
   def load!
+    unless loaded?
+      fetch_folder_contents!
+      @loaded = true
+    end
+    @loaded
+  end
+
+  def refresh!
+    fetch_folder_contents!
+    @loaded = true
+  end
+
+  private
+
+  # Get folder contents from resource map
+  def fetch_folder_contents!
     @contents = []
+
     # Load folder contents
     graph = RDF::Graph.load(resource_map_uri)
 
     query = RDF::Query.new do
       pattern [:folder_entry, RDF.type,  RDF::RO.FolderEntry]
       pattern [:folder_entry, RDF::RO.entryName, :name]
-      pattern [:folder_entry, RDF::ORE.proxy_for, :target]
+      pattern [:folder_entry, RDF::ORE.proxyFor, :target]
       pattern [:target, RDF.type, RDF::RO.Resource]
       # The pattern below is treated as mandatory - Bug in RDF library! :(
       pattern [:target, RDF::ORE.isDescribedBy, :target_resource_map], :optional => true
     end
 
-    query.execute(graph).each do |result|
+    # Create instances for each item.
+    graph.query(query).each do |result|
       if result.respond_to? :target_resource_map
-        @contents << Folder.new(result.name.to_s, result.target.to_s, self, result.target_resource_map.to_s)
+        @contents << Folder.new(result.name.to_s, result.target.to_s, self, result.target_resource_map.to_s, eager_load?)
       else
         @contents << FolderEntry.new(result.name.to_s, result.target.to_s, self)
       end
     end
-
-    #   Create instances for each item. Pass along eager_load setting to child folders.
-    @loaded = true
   end
 
 end

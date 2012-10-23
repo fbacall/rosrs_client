@@ -9,6 +9,7 @@
 module RDF
 
   class AO < Vocabulary("http://purl.org/ao/")
+    # Declaring these might not be necessary
     property :Annotation
     property :body
     property :annotatesResource
@@ -43,4 +44,5 @@ module RDF
     property :resource
     property :defaultBase
   end
+
 end

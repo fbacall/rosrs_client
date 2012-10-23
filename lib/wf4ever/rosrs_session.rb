@@ -2,7 +2,7 @@
 
 class ROSRSSession
   # Exception class used to signal HTTP Session errors
-  class ROSRSSession::Exception < Exception; end
+  class Exception < Exception; end
 
   ANNOTATION_CONTENT_TYPES =
     { "application/rdf+xml" => :xml,
@@ -18,8 +18,7 @@ class ROSRSSession
   # -------------
 
   def initialize(uri, accesskey=nil)
-    # Force string or URI to be a URI - tried coerce, didn't work
-    @uri = URI(uri.to_s)
+    @uri = URI(uri.to_s) # Force string or URI to be a URI - tried coerce, didn't work
     @key = accesskey
     @http = Net::HTTP.new(@uri.host, @uri.port)
   end
@@ -43,13 +42,14 @@ class ROSRSSession
   # Helpers
   # -------
 
+  ##
+  # Helper function returns list of delimited values in a string,
+  # where delimiters in quotes are protected.
+  #
+  # sep is string of separator
+  # lq is string of opening quotes for strings within which separators are not recognized
+  # rq is string of corresponding closing quotes
   def split_values(txt, sep=",", lq=%q('"<), rq=%q('">))
-    # Helper function returns list of delimited values in a string,
-    # where delimiters in quotes are protected.
-    #
-    # sep is string of separator
-    # lq is string of opening quotes for strings within which separators are not recognized
-    # rq is string of corresponding closing quotes
     result = []
     cursor = 0
     begseg = cursor
@@ -80,9 +80,10 @@ class ROSRSSession
     result
   end
 
+  ##
+  # Parse links from headers; returns a hash indexed by link relation
+  # Headerlist is a hash indexed by header field name (see HTTP:Response)
   def parse_links(headerlist)
-    # Parse links from headers; returns a hash indexed by link relation
-    # Headerlist is a hash indexed by header field name (see HTTP:Response)
     links = {}
     headerlist.each do |h,v|
       #puts "h #{h} = #{v}"
@@ -111,11 +112,12 @@ class ROSRSSession
     links
   end
 
+  ##
+  # Extract path (incl query) for HTTP request
+  # Should accept URI, RDF::URI or string values
+  # Must be same host and port as session URI
+  # Relative values are based on session URI
   def get_request_path(uripath)
-    # Extract path (incl query) for HTTP request
-    # Should accept URI, RDF::URI or string values
-    # Must be same host and port as session URI
-    # Relative values are based on session URI
     uripath = URI(uripath.to_s)
     if uripath.scheme && (uripath.scheme != @uri.scheme)
       error("Request URI scheme does not match session: #{uripath}")
@@ -153,19 +155,20 @@ class ROSRSSession
     reqheaders
   end
 
+  ##
+  # Perform HTTP request
+  #
+  # method        HTTP method name
+  # uripath       is reference or URI of resource (see get_request_path)
+  # options: {
+  #   body    => body to accompany request
+  #   ctype   => content type of supplied body
+  #   accept  => accept co ntent types for response
+  #   headers => additional headers for request
+  #   }
+  # Return [code, reason(text), response headers, response body]
+  #
   def do_request(method, uripath, options = {})
-    # Perform HTTP request
-    #
-    # method        HTTP method name
-    # uripath       is reference or URI of resource (see get_request_path)
-    # options: {
-    #   body    => body to accompany request
-    #   ctype   => content type of supplied body
-    #   accept  => accept co ntent types for response
-    #   headers => additional headers for request
-    #   }
-    # Return [code, reason(text), response headers, response body]
-    #
     case method
     when 'GET'
       req = Net::HTTP::Get.new(get_request_path(uripath))
@@ -188,9 +191,10 @@ class ROSRSSession
     [Integer(resp.code), resp.message, resp, resp.body]
   end
 
+  ##
+  # Perform HTTP request, following 302, 303 307 redirects
+  # Return [code, reason(text), response headers, final uri, response body]
   def do_request_follow_redirect(method, uripath, options = {})
-    # Perform HTTP request, following 302, 303 307 redirects
-    # Return [code, reason(text), response headers, final uri, response body]
     code, reason, headers, data = do_request(method, uripath, options)
     if [302,303,307].include?(code)
       uripath = headers["location"]
@@ -204,11 +208,12 @@ class ROSRSSession
     [code, reason, headers, uripath, data]
   end
 
+  ##
+  # Perform HTTP request expecting an RDF/XML response
+  # Return [code, reason(text), response headers, manifest graph]
+  # Returns the manifest as a graph if the request is successful
+  # otherwise returns the raw response data.
   def do_request_rdf(method, uripath, options = {})
-    # Perform HTTP request expecting an RDF/XML response
-    # Return [code, reason(text), response headers, manifest graph]
-    # Returns the manifest as a graph if the request is successful
-    # otherwise returns the raw response data.
     options[:accept] = "application/rdf+xml"
     code, reason, headers, uripath, data = do_request_follow_redirect(method, uripath, options)
     if code >= 200 and code < 300
@@ -231,8 +236,9 @@ class ROSRSSession
   # RO manipulation
   # ---------------
 
+  ##
+  # Returns [copde, reason, uri, manifest]
   def create_research_object(name, title, creator, date)
-    # Returns [copde, reason, uri, manifest]
     reqheaders   = {
         "slug"    => name
         }
@@ -270,18 +276,19 @@ class ROSRSSession
   # Resource manipulation
   # ---------------------
 
+  ##
+  # Aggregate internal resource
+  #
+  # options:
+  # [:body]    body to accompany request
+  # [:ctype]   content type of supplied body
+  # [:accept]  accept content types for response
+  # [:headers] additional headers for request
+  #
+  # Returns: [code, reason, proxyuri, resource_uri], where code is 200 or 201
+
   def aggregate_internal_resource(ro_uri, respath=nil, options={})
-    # Aggregate internal resource
-    #
-    # options: {
-    #   body    => body to accompany request
-    #   ctype   => content type of supplied body
-    #   accept  => accept content types for response
-    #   headers => additional headers for request
-    #   }
-    # Returns: [code, reason, proxyuri, resource_uri], where code is 200 or 201
-    #
-    # POST (empty) proxy value to RO ...
+      # POST (empty) proxy value to RO ...
     reqheaders = options[:headers] || {}
     if respath
       reqheaders['slug'] = respath
@@ -304,7 +311,7 @@ class ROSRSSession
     end
     proxyuri = URI(headers["location"])
     links    = parse_links(headers)
-    resource_uri = links[ORE[:proxyFor].to_s]
+    resource_uri = links[RDF::ORE.proxyFor.to_s]
     unless resource_uri
       error("No ore:proxyFor link in create proxy response",
             "Proxy URI #{proxyuri}")
@@ -322,17 +329,18 @@ class ROSRSSession
   # Resource access
   # -----------------------
 
+  ##
+  # Retrieve resource from RO
+  #
+  # resuriref     is relative reference or URI of resource
+  # ro_uri         is URI of RO, used as base for relative reference
+  # options:
+  #   accept  => (content type)
+  #   headers => (request headers)
+  #
+  # Returns:
+  #   [code, reason, headers, data], where code is 200 or 404
   def get_resource(resuriref, ro_uri=nil, options={})
-    # Retrieve resource from RO
-    #
-    # resuriref     is relative reference or URI of resource
-    # ro_uri         is URI of RO, used as base for relative reference
-    # options:
-    #   accept  => (content type)
-    #   headers => (request headers)
-    #
-    # Returns:
-    #   [code, reason, headers, data], where code is 200 or 404
     if ro_uri
       resuriref = URI.join(ro_uri.to_s, resuriref.to_s)
     end
@@ -343,19 +351,19 @@ class ROSRSSession
     [code, reason, headers, uri, data]
   end
 
+  ##
+  # Retrieve RDF resource from RO
+  #
+  # resource_uri    is relative reference or URI of resource
+  # ro_uri     is URI of RO, used as base for relative reference
+  # options:
+  #   headers => (request headers)
+  #
+  # Returns:
+  #   [code, reason, headers, uri, data], where code is 200 or 404
+  #
+  # If code isreturned as 200, data is returned as an RDFGraph value
   def get_resource_rdf(resource_uri, ro_uri=nil, options={})
-    # Retrieve RDF resource from RO
-    #
-    # resource_uri    is relative reference or URI of resource
-    # ro_uri     is URI of RO, used as base for relative reference
-    # options:
-    #   headers => (request headers)
-    #
-    # Returns:
-    #   [code, reason, headers, uri, data], where code is 200 or 404
-    #
-    # If code isreturned as 200, data is returned as an RDFGraph value
-    #
     if ro_uri
       resource_uri = URI.join(ro_uri.to_s, resource_uri.to_s)
     end
@@ -366,27 +374,11 @@ class ROSRSSession
     [code, reason, headers, uri, data]
   end
 
-  #~ def getROResourceProxy(self, resuriref, ro_uri):
-      #~ """
-      #~ Retrieve proxy description for resource.
-      #~ Return (proxyuri, manifest)
-      #~ """
-      #~ (code, reason, headers, manifesturi, manifest) = get_ro_manifest(ro_uri)
-      #~ if code not in [200,404]:
-          #~ raise self.error("Error retrieving RO manifest", "%03d %s"%
-                           #~ (code, reason))
-      #~ proxyuri = None
-      #~ if code == 200:
-          #~ resource_uri = rdflib.URIRef(urlparse.urljoin(str(ro_uri), str(resuriref)))
-          #~ proxyterms = list(manifest.subjects(predicate=ORE.proxyFor, object=resource_uri))
-          #~ log.debug("getROResourceProxy proxyterms: %s"%(repr(proxyterms)))
-          #~ if len(proxyterms) == 1:
-              #~ proxyuri = proxyterms[0]
-      #~ return (proxyuri, manifest)
-
+  ##
+  # Retrieve an RO manifest
+  #
+  # Returns [manifesturi, manifest]
   def get_manifest(ro_uri)
-    # Retrieve an RO manifest
-    # Returns [manifesturi, manifest]
     code, reason, headers, uri, data = do_request_rdf("GET", ro_uri)
     if code != 200
       error("Error retrieving RO manifest: #{code} #{reason}")
@@ -394,38 +386,15 @@ class ROSRSSession
     [uri, data]
   end
 
-  #~ def getROLandingPage(self, ro_uri):
-      #~ """
-      #~ Retrieve an RO landing page
-      #~ Return (code, reason, headers, uri, data), where code is 200 or 404
-      #~ """
-      #~ (code, reason, headers, uri, data) = self.do_request_follow_redirect(ro_uri,
-          #~ method="GET", accept="text/html")
-      #~ if code in [200, 404]:
-          #~ return (code, reason, headers, uri, data)
-      #~ raise self.error("Error retrieving RO landing page",
-          #~ "%03d %s"%(code, reason))
-
-  #~ def getROZip(self, ro_uri):
-      #~ """
-      #~ Retrieve an RO as ZIP file
-      #~ Return (code, reason, headers, data), where code is 200 or 404
-      #~ """
-      #~ (code, reason, headers, uri, data) = self.do_request_follow_redirect(ro_uri,
-          #~ method="GET", accept="application/zip")
-      #~ if code in [200, 404]:
-          #~ return (code, reason, headers, uri, data)
-      #~ raise self.error("Error retrieving RO as ZIP file",
-          #~ "%03d %s"%(code, reason))
-
   # -----------------------
   # Annotation manipulation
   # -----------------------
 
+  ##
+  # Create an annotation body from a supplied annnotation graph.
+  #
+  # Returns: [code, reason, body_uri]
   def create_annotation_body(ro_uri, annotation_graph)
-    # Create an annotation body from a supplied annnotation graph.
-    #
-    # Returns: [code, reason, body_uri]
     code, reason, bodyproxyuri, body_uri = aggregate_internal_resource(ro_uri, nil,
       :ctype => "application/rdf+xml",
       :body  => annotation_graph.serialize(format=:xml))
@@ -436,8 +405,9 @@ class ROSRSSession
     [code, reason, body_uri]
   end
 
+  ##
+  # Create entity body for annotation stub
   def create_annotation_stub_rdf(ro_uri, resource_uri, body_uri)
-    # Create entity body for annotation stub
     v = { :xmlbase => ro_uri.to_s,
           :resource_uri  => resource_uri.to_s,
           :body_uri => body_uri.to_s
@@ -459,10 +429,11 @@ class ROSRSSession
     annotation_stub
   end
 
+  ##
+  # Create an annotation stub for supplied resource using indicated body
+  #
+  # Returns: [code, reason, stuburi]
   def create_annotation_stub(ro_uri, resource_uri, body_uri)
-    # Create an annotation stub for supplied resource using indicated body
-    #
-    # Returns: [code, reason, stuburi]
     annotation = create_annotation_stub_rdf(ro_uri, resource_uri, body_uri)
     code, reason, headers, data = do_request("POST", ro_uri,
         :ctype => "application/vnd.wf4ever.annotation",
@@ -473,10 +444,11 @@ class ROSRSSession
     [code, reason, URI(headers["location"])]
   end
 
+  ##
+  # Create internal annotation
+  #
+  # Returns: [code, reason, annotation_uri, body_uri]
   def create_internal_annotation(ro_uri, resource_uri, annotation_graph)
-    # Create internal annotation
-    #
-    # Returns: [code, reason, annotation_uri, body_uri]
     code, reason, body_uri = create_annotation_body(ro_uri, annotation_graph)
     if code == 201
       code, reason, annotation_uri = create_annotation_stub(ro_uri, resource_uri, body_uri)
@@ -484,17 +456,20 @@ class ROSRSSession
     [code, reason, annotation_uri, body_uri]
   end
 
+  ##
+  # UNIMPLEMENTED
+  # Create a resource annotation using an existing (possibly external) annotation body
+  #
+  # Returns: (code, reason, annotation_uri)
   def create_external_annotation(ro_uri, resource_uri, body_uri)
-    # Create a resource annotation using an existing (possibly external) annotation body
-    #
-    # Returns: (code, reason, annotation_uri)
     error("Unimplemented")
   end
 
+  ##
+  # Update an indicated annotation for supplied resource using indicated body
+  #
+  # Returns: [code, reason]
   def update_annotation_stub(ro_uri, stuburi, resource_uri, body_uri)
-    # Update an indicated annotation for supplied resource using indicated body
-    #
-    # Returns: [code, reason]
     annotation = create_annotation_stub_rdf(ro_uri, resource_uri, body_uri)
     code, reason, headers, data = do_request("PUT", stuburi,
         :ctype => "application/vnd.wf4ever.annotation",
@@ -505,10 +480,11 @@ class ROSRSSession
     [code, reason]
   end
 
+  ##
+  # Update an annotation with a new internal annotation body
+  #
+  # returns: [code, reason, body_uri]
   def update_internal_annotation(ro_uri, stuburi, resource_uri, annotation_graph)
-    # Update an annotation with a new internal annotation body
-    #
-    # returns: [code, reason, body_uri]
     code, reason, body_uri = create_annotation_body(ro_uri, annotation_graph)
     if code != 201
         error("Error creating annotation #{code}, #{reason}, #{resource_uri}")
@@ -517,33 +493,36 @@ class ROSRSSession
     [code, reason, body_uri]
   end
 
+  ##
+  # Update an annotation with an existing (possibly external) annotation body
+  #
+  # returns: (code, reason)
   def update_external_annotation(ro_uri, annotation_uri, body_uri)
-    # Update an annotation with an existing (possibly external) annotation body
-    #
-    # returns: (code, reason)
     error("Unimplemented")
   end
 
+  ##
+  # Enumerate annnotation URIs associated with a resource
+  # (or all annotations for an RO)
+  #
+  # Returns an array of annotation URIs
   def get_annotation_stub_uris(ro_uri, resource_uri=nil)
-    # Enumerate annnotation URIs associated with a resource
-    # (or all annotations for an RO)
-    #
-    # Returns an array of annotation URIs
     manifesturi, manifest = get_manifest(ro_uri)
     stuburis = []
     manifest.query(:object => RDF::URI(resource_uri)) do |stmt|
-      if [AO.annotatesResource,RO.annotatesAggregatedResource].include?(stmt.predicate)
+      if [RDF::AO.annotatesResource,RDF::RO.annotatesAggregatedResource].include?(stmt.predicate)
         stuburis << stmt.subject
       end
     end
     stuburis
   end
 
+  ##
+  # Enumerate annnotation body URIs associated with a resource
+  # (or all annotations for an RO)
+  #
+  # Returns an array of annotation body URIs
   def get_annotation_body_uris(ro_uri, resource_uri=nil)
-    # Enumerate annnotation body URIs associated with a resource
-    # (or all annotations for an RO)
-    #
-    # Returns an array of annotation body URIs
     body_uris = []
     get_annotation_stub_uris(ro_uri, resource_uri).each do |stuburi|
       body_uris << get_annotation_body_uri(stuburi)
@@ -551,8 +530,9 @@ class ROSRSSession
     body_uris
   end
 
+  ##
+  # Retrieve annotation body URI for given annotation stub URI
   def get_annotation_body_uri(stuburi)
-    # Retrieve annotation body URI for given annotation stub URI
     code, reason, headers  = do_request("GET", stuburi, {})
     if code != 303
       error("No redirect from annnotation stub URI: #{code} #{reason}, #{stuburi}")
@@ -563,11 +543,12 @@ class ROSRSSession
     RDF::URI(headers['location'])
   end
 
+  ##
+  # Build RDF graph of all annnotations associated with a resource
+  # (or all annotations for an RO)
+  #
+  # Returns graph of merged annotations
   def get_annotation_graph(ro_uri, resource_uri=nil)
-    # Build RDF graph of all annnotations associated with a resource
-    # (or all annotations for an RO)
-    #
-    # Returns graph of merged annotations
     annotation_graph = RDFGraph.new
     get_annotation_stub_uris(ro_uri, resource_uri).each do |auri|
       code, reason, headers, buri, bodytext = do_request_follow_redirect("GET", auri, {})
@@ -586,10 +567,11 @@ class ROSRSSession
     annotation_graph
   end
 
+  ##
+  # Retrieve annotation for given annotation URI
+  #
+  # Returns: [code, reason, body_uri, annotation_graph]
   def get_annotation_body(annotation_uri)
-    # Retrieve annotation for given annotation URI
-    #
-    # Returns: [code, reason, body_uri, annotation_graph]
     code, reason, headers, uri, annotation_graph = get_resource_rdf(annotation_uri)
     [code, reason, uri, annotation_graph]
   end
@@ -604,20 +586,38 @@ class ROSRSSession
     error("Unimplemented")
   end
 
-  def get_root_folder(ro_uri)
-    Folder.new
+  # -----------------------
+  # Folder manipulation
+  # -----------------------
+
+  ##
+  # Returns an array of the given research object's root folders, as Folder objects.
+  def get_root_folders(ro_uri, options = {})
+    uri, data = get_manifest(ro_uri)
+    query = RDF::Query.new do
+      pattern [:folder, RDF.type,  RDF::RO.Folder]
+      pattern [:folder, RDF::ORE.isDescribedBy, :folder_resource_map]
+    end
+
+    data.query(query).collect do |result|
+      get_folder(result.folder_resource_map.to_s, options.merge({:name => result.folder.to_s}))
+    end
   end
 
-  def get_folder(folder_description_uri)
-
-
-
-
-    Folder.new
+  ##
+  # Returns a Folder object from the given resource map URI.
+  def get_folder(folder_resource_map_uri, options = {})
+    folder_name = options[:name] || URI(folder_resource_map_uri).path[1..-1].split('.',2)[0]
+    Folder.new(folder_name, options[:path], folder_resource_map_uri, options[:parent], options[:eager_load])
   end
 
-  def get_folder_hierarchy(ro_uri)
-
+  ##
+  # Returns an array of the given research object's root folders, as Folder objects.
+  # These folders have their contents pre-loaded,
+  # and the full hierarchy can be traversed without making further requests
+  def get_folder_hierarchy(ro_uri, options = {})
+    options[:eager_load] = true
+    get_root_folders(ro_uri, options)
   end
 
 
