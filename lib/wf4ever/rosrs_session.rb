@@ -556,7 +556,7 @@ class ROSRSSession
   # Returns a Folder object from the given resource map URI.
   def get_folder(folder_uri, options = {})
     folder_name = options[:name] || URI(folder_uri).path[1..-1].split('.',2)[0]
-    Folder.new(folder_name, folder_uri, options[:parent], self, options[:eager_load])
+    Folder.new(folder_name, folder_uri, options[:parent], self, :eager_load => options[:eager_load])
   end
 
   ##
@@ -643,9 +643,5 @@ class ROSRSSession
 
     folder_description.query(query).collect {|e| {:name => e.name.to_s, :uri => e.target.to_s}}
   end
-
-  public
-
-
 
 end
