@@ -100,6 +100,8 @@ class ROSRSSession
     reqheaders
   end
 
+  public
+
   ##
   # Perform HTTP request
   #
@@ -173,13 +175,11 @@ class ROSRSSession
         end
       else
         code = 901
-        reason = "Non-RDF content-type returned (#{h["content-type"]})"
+        reason = "Non-RDF content-type returned (#{headers["content-type"]})"
       end
     end
     [code, reason, headers, uripath, data]
   end
-
-  public
 
   # ---------------
   # RO manipulation
@@ -555,8 +555,8 @@ class ROSRSSession
   ##
   # Returns a Folder object from the given resource map URI.
   def get_folder(folder_uri, options = {})
-    folder_name = options[:name] || URI(folder_uri).path[1..-1].split('.',2)[0]
-    Folder.new(folder_name, folder_uri, options[:parent], self, :eager_load => options[:eager_load])
+    folder_name = options[:name] || folder_uri.split('/').last
+    RO::Folder.new(folder_name, folder_uri, options[:parent], self, :eager_load => options[:eager_load])
   end
 
   ##
@@ -569,13 +569,24 @@ class ROSRSSession
   end
 
   ##
+  # Takes a folder URI and returns a it's description in RDF
+  def get_folder_description(folder_uri)
+    code, reason, headers, uripath, graph = do_request_rdf("GET", folder_uri)
+    if code == 201
+      parse_folder_description(graph)
+    else
+      error("Error getting folder description: #{code} #{reason}")
+    end
+  end
+
+  ##
   # +contents+ is an Array containing Hash elements, which must consist of a :uri and an optional :name.
   # Example:
   #   folder_contents = [{:name => 'test_data.txt', :uri => 'http://www.example.com/ro/file1.txt'},
   #                      {:uri => 'http://www.myexperiment.org/workflows/7'}]
   #   create_folder('ros/new_ro/', 'example_data', folder_contents)
   #
-  # Returns [uri, folder_contents]
+  # Returns Folder object
   #
   # +uri+:: The URI of the created folder
   # +folder_contents+:: A list of the folder's contents. In the same form as +contents+.
@@ -585,7 +596,20 @@ class ROSRSSession
         :headers    => {"Slug" => name, "Content-Type" => 'application/vnd.wf4ever.folder'})
 
     if code == 201
-      [parse_links(headers)[RDF::ORE.proxyFor.to_s], parse_folder_description(graph)]
+      uri = parse_links(headers)[RDF::ORE.proxyFor.to_s]
+      folder = RO::Folder.new(uri.split('/').last, uri, nil, self)
+
+      # Parse folder contents
+      query = RDF::Query.new do
+        pattern [:folder_entry, RDF.type, RDF.Description]
+        pattern [:folder_entry, RDF::RO.entryName, :name]
+        pattern [:folder_entry, RDF::ORE.proxyFor, :target]
+      end
+
+      folder.set_contents! folder_description.query(query).collect {|e| RO::FolderEntry.new(e.name.to_s,
+                                                                                            e.target.to_s,
+                                                                                            folder)}
+      folder
     else
       error("Error creating folder: #{code} #{reason}")
     end
@@ -629,19 +653,6 @@ class ROSRSSession
     )
 
     body
-  end
-
-  ##
-  # Takes an ro:Folder RDF description and returns an Array of Hashes, containing the :name and :uri for
-  # each FolderEntry.
-  def parse_folder_description(folder_description)
-    query = RDF::Query.new do
-      pattern [:folder_entry, RDF.type, RDF.Description]
-      pattern [:folder_entry, RDF::RO.entryName, :name]
-      pattern [:folder_entry, RDF::ORE.proxyFor, :target]
-    end
-
-    folder_description.query(query).collect {|e| {:name => e.name.to_s, :uri => e.target.to_s}}
   end
 
 end

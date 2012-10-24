@@ -102,6 +102,19 @@ Here is a flavour of how the `rosrs_session` module may be used:
     if code != 201
         raise "Failed to create new resource: "+reason
 
+    # Create a new folder
+    folder_contents = [{:name => 'test_data.txt', :uri => 'http://www.example.com/ro/file1.txt'},
+                       {:uri => 'http://www.myexperiment.org/workflows/7'}]
+    folder_uri = rosrs.create_folder(rouri, "Input Data", folder_contents)
+
+    # Examine a folder
+    folder = rosrs.get_folder(folder_uri)
+    puts folder.name
+    puts folder.contents.inspect
+
+
+
+
     # When finished, close session
     rosrs.close
 
