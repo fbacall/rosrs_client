@@ -105,7 +105,7 @@ Here is a flavour of how the `rosrs_session` module may be used:
     # Create a new folder
     folder_contents = [{:name => 'test_data.txt', :uri => 'http://www.example.com/ro/file1.txt'},
                        {:uri => 'http://www.myexperiment.org/workflows/7'}]
-    folder_uri = rosrs.create_folder(rouri, "Input Data", folder_contents)
+    folder_uri = rosrs.create_folder(rouri, "Input Data", folder_contents).uri
 
     # Examine a folder
     folder = rosrs.get_folder(folder_uri)
