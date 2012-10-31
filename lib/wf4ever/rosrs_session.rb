@@ -105,8 +105,8 @@ class ROSRSSession
   ##
   # Perform HTTP request
   #
-  # method        HTTP method name
-  # uripath       is reference or URI of resource (see get_request_path)
+  # +method+::        HTTP method name
+  # +uripath+::       is reference or URI of resource (see get_request_path)
   # options:
   # [:body]    body to accompany request
   # [:ctype]   content type of supplied body
@@ -166,7 +166,7 @@ class ROSRSSession
     options[:accept] ||= "application/rdf+xml"
     code, reason, headers, uripath, data = do_request_follow_redirect(method, uripath, options)
     if code >= 200 and code < 300
-      if headers["content-type"].downcase == "application/rdf+xml"
+      if headers["content-type"].downcase == options[:accept]
         begin
           data = RDFGraph.new(:data => data, :format => :xml)
         rescue Exception => e
@@ -405,12 +405,11 @@ class ROSRSSession
   end
 
   ##
-  # UNIMPLEMENTED
   # Create a resource annotation using an existing (possibly external) annotation body
   #
   # Returns: (code, reason, annotation_uri)
   def create_external_annotation(ro_uri, resource_uri, body_uri)
-    error("Unimplemented")
+    create_annotation_stub(ro_uri, resource_uri, body_uri)
   end
 
   ##
@@ -445,8 +444,8 @@ class ROSRSSession
   # Update an annotation with an existing (possibly external) annotation body
   #
   # returns: (code, reason)
-  def update_external_annotation(ro_uri, annotation_uri, body_uri)
-    error("Unimplemented")
+  def update_external_annotation(ro_uri, annotation_uri, resource_uri, body_uri)
+    update_annotation_stub(ro_uri, annotation_uri, resource_uri, body_uri)
   end
 
   ##
@@ -526,12 +525,15 @@ class ROSRSSession
 
   ##
   # Remove annotation at given annotation URI
-  # UNIMPLEMENTED
   #
   # Returns: (code, reason)
-  def remove_annotation(ro_uri, annotation_uri)
-
-    error("Unimplemented")
+  def remove_annotation(annotation_uri)
+    code, reason = do_request("DELETE", annotation_uri)
+    if code == 204
+      [code, reason]
+    else
+      error("Failed to DELETE annotation #{annotation_uri}: #{code} #{reason}")
+    end
   end
 
   # -----------------------
@@ -540,38 +542,39 @@ class ROSRSSession
 
   ##
   # Returns an array of the given research object's root folders, as Folder objects.
-  def get_root_folders(ro_uri, options = {})
+  def get_root_folder(ro_uri, options = {})
     uri, data = get_manifest(ro_uri)
     query = RDF::Query.new do
-      pattern [:folder, RDF.type,  RDF::RO.RootFolder]
+      pattern [:research_object, RDF::RO.rootFolder,  :folder]
       pattern [:folder, RDF::ORE.isDescribedBy, :folder_resource_map]
     end
 
-    data.query(query).collect do |result|
-      get_folder(result.folder_resource_map.to_s, options.merge({:name => result.folder.to_s}))
-    end
+    result = data.query(query).first
+
+    get_folder(result.folder_resource_map.to_s, options.merge({:name => result.folder.to_s}))
   end
 
   ##
-  # Returns a Folder object from the given resource map URI.
+  # Returns an RO::Folder object from the given resource map URI.
   def get_folder(folder_uri, options = {})
-    folder_name = options[:name] || folder_uri.split('/').last
-    RO::Folder.new(folder_name, folder_uri, options[:parent], self, :eager_load => options[:eager_load])
+    folder_name = options[:name] || folder_uri.to_s.split('/').last
+    RO::Folder.new(self, folder_name, folder_uri, :eager_load => options[:eager_load])
   end
 
   ##
-  # Returns an array of the given research object's root folders, as Folder objects.
-  # These folders have their contents pre-loaded,
+  # Returns an array of the given research object's root folders, as RO::Folder objects.
+  # These folders have their contents pre-loaded
   # and the full hierarchy can be traversed without making further requests
   def get_folder_hierarchy(ro_uri, options = {})
     options[:eager_load] = true
-    get_root_folders(ro_uri, options)
+    get_root_folder(ro_uri, options)
   end
 
   ##
   # Takes a folder URI and returns a it's description in RDF
   def get_folder_description(folder_uri)
-    code, reason, headers, uripath, graph = do_request_rdf("GET", folder_uri)
+    code, reason, headers, uripath, graph = do_request_rdf("GET", folder_uri,
+                                                           :accept => 'application/vnd.wf4ever.folder')
     if code == 201
       parse_folder_description(graph)
     else
@@ -586,47 +589,65 @@ class ROSRSSession
   #                      {:uri => 'http://www.myexperiment.org/workflows/7'}]
   #   create_folder('ros/new_ro/', 'example_data', folder_contents)
   #
-  # Returns Folder object
-  #
-  # +uri+:: The URI of the created folder
-  # +folder_contents+:: A list of the folder's contents. In the same form as +contents+.
+  # Returns the created folder as an RO::Folder object
   def create_folder(ro_uri, name, contents)
-    code, reason, headers, uripath, graph = do_request_rdf("POST", ro_uri,
+    code, reason, headers, uripath, folder_description = do_request_rdf("POST", ro_uri,
         :body       => create_folder_description(contents),
-        :headers    => {"Slug" => name, "Content-Type" => 'application/vnd.wf4ever.folder'})
+        :headers    => {"Slug" => name,
+                        "Content-Type" => 'application/vnd.wf4ever.folder',},
+        :accept     => 'application/vnd.wf4ever.folder')
 
     if code == 201
       uri = parse_links(headers)[RDF::ORE.proxyFor.to_s]
-      folder = RO::Folder.new(uri.split('/').last, uri, nil, self)
+      folder = RO::Folder.new(self, uri.to_s.split('/').last, uri)
 
-      # Parse folder contents
+      # Parse folder contents from response
       query = RDF::Query.new do
         pattern [:folder_entry, RDF.type, RDF.Description]
         pattern [:folder_entry, RDF::RO.entryName, :name]
         pattern [:folder_entry, RDF::ORE.proxyFor, :target]
+        #pattern [:folder_entry, SOMETHING, :entry_uri]
       end
 
-      folder.set_contents! folder_description.query(query).collect {|e| RO::FolderEntry.new(e.name.to_s,
-                                                                                            e.target.to_s,
-                                                                                            folder)}
+      folder_contents = folder_description.query(query).collect do |e|
+        RO::FolderEntry.new(self, e.name.to_s, e.target.to_s, e.entry_uri.to_s, folder)
+      end
+
+      folder.set_contents!(folder_contents)
       folder
     else
       error("Error creating folder: #{code} #{reason}")
     end
   end
 
-  def update_folder(ro_uri, folder_name)
-
+  def delete_folder(folder_uri)
+    code, reason = do_request("DELETE", folder_uri)
+    error("Error deleting folder #{folder_uri}: #{code} #{reason}") unless [204, 404].include?(code)
+    [code, reason]
   end
 
-  def delete_folder(ro_uri, folder_name)
+  def add_folder_entry(folder_uri, resource_uri, resource_name = nil, options = {})
+    code, reason, headers, body= do_request("POST", folder_uri,
+        :body       => create_folder_entry_description(resource_uri, resource_name),
+        :headers    => {"Content-Type" => 'application/vnd.wf4ever.proxy',})
+    if code == 201
+      RO::FolderEntry.new(self, resource_name, parse_links(headers)[RDF::ORE.proxyFor.to_s],
+                          headers["Location"], options[:folder])
+    else
+      error("Error adding resource to folder: #{code} #{reason}")
+    end
+  end
 
+  def remove_folder_entry(folder_entry_uri)
+    code, reason = do_request("DELETE", folder_entry_uri)
+    error("Error removing folder entry #{folder_entry_uri}: #{code} #{reason}") unless [204, 404].include?(code)
+    [code, reason]
   end
 
   private
 
   ##
-  # Takes +contents+ ,an Array containing Hash elements, which must consist of a :uri and an optional :name,
+  # Takes +contents+, an Array containing Hash elements, which must consist of a :uri and an optional :name,
   # and returns an RDF description of the folder contents.
   def create_folder_description(contents)
     body = %(
@@ -640,18 +661,35 @@ class ROSRSSession
     )
     contents.each do |r|
       if r[:name]
-        body << %(
-          <ro:FolderEntry>
-            <ro:entryName>#{r[:name]}</ro:entryName>
-            <ore:proxyFor rdf:resource="#{r[:uri]}" />
-          </ro:FolderEntry>
-        )
+        body << create_folder_entry_body(r[:uri], r[:name])
       end
     end
     body << %(
       </rdf:RDF>
     )
 
+    body
+  end
+
+  def create_folder_entry_description(uri, name = nil)
+   %(
+      <rdf:RDF
+        xmlns:ore="#{RDF::ORE.to_uri.to_s}"
+        xmlns:rdf="#{RDF.to_uri.to_s}"
+        xmlns:ro="#{RDF::RO.to_uri.to_s}" >
+        #{create_folder_entry_body(uri, name)}
+      </rdf:RDF>
+    )
+  end
+
+  def create_folder_entry_body(uri, name = nil)
+    body = %(
+      <ro:FolderEntry>
+    )
+    body << "<ro:entryName>#{name}</ro:entryName>" if name
+    body << %(<ore:proxyFor rdf:resource="#{uri}" />
+      </ro:FolderEntry>
+    )
     body
   end
 

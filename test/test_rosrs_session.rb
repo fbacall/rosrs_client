@@ -119,21 +119,21 @@ class TestROSRSSession < Test::Unit::TestCase
     assert_equal(RDF::URI("http://www.w3.org/2000/01/rdf-schema#seeAlso"), RDF::RDFS.seeAlso)
   end
 
-  def test_parse_links
-    assert_equal(URI('http://example.org/foo'),
-                 @rosrs.parse_links({'Link' => '<http://example.org/foo>; rel=foo'})['foo'])
-    assert_equal({},@rosrs.parse_links({'link' => ' <http://example.org/fie> ; par = fie '}))
-    assert_equal(URI('http://example.org/bar'),
-                 @rosrs.parse_links({'link' => ' <http://example.org/bar> ; rel = bar '})['bar'])
-    assert_equal(URI('http://example.org/bas'),
-                 @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bas'])
-    assert_equal(URI('http://example.org/bat'),
-                 @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bat'])
-    assert_equal(URI('http://example.org/fum'),
-                 @rosrs.parse_links({'Link' => ' <http://example.org/fum> ; rel = "http://example.org/rel/fum" '})['http://example.org/rel/fum'])
-    assert_equal(URI('http://example.org/fas;far'),
-                 @rosrs.parse_links({'link' => ' <http://example.org/fas;far> ; rel = "http://example.org/rel/fas" '})['http://example.org/rel/fas'])
-  end
+  #def test_parse_links
+  #  assert_equal(URI('http://example.org/foo'),
+  #               @rosrs.parse_links({'Link' => '<http://example.org/foo>; rel=foo'})['foo'])
+  #  assert_equal({},@rosrs.parse_links({'link' => ' <http://example.org/fie> ; par = fie '}))
+  #  assert_equal(URI('http://example.org/bar'),
+  #               @rosrs.parse_links({'link' => ' <http://example.org/bar> ; rel = bar '})['bar'])
+  #  assert_equal(URI('http://example.org/bas'),
+  #               @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bas'])
+  #  assert_equal(URI('http://example.org/bat'),
+  #               @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bat'])
+  #  assert_equal(URI('http://example.org/fum'),
+  #               @rosrs.parse_links({'Link' => ' <http://example.org/fum> ; rel = "http://example.org/rel/fum" '})['http://example.org/rel/fum'])
+  #  assert_equal(URI('http://example.org/fas;far'),
+  #               @rosrs.parse_links({'link' => ' <http://example.org/fas;far> ; rel = "http://example.org/rel/fas" '})['http://example.org/rel/fas'])
+  #end
 
   def test_create_serialize_graph
     b = %q(
@@ -370,5 +370,41 @@ class TestROSRSSession < Test::Unit::TestCase
     # Clean up
     c,r = delete_test_research_object
   end
+
+  def test_create_external_annotation
+    c,r,u,m = create_test_research_object
+    assert_equal(201, c)
+    populate_test_research_object
+
+    # Create external annotation on @res_txt
+    c,r,annuri,bodyuri1 = @rosrs.create_external_annotation(@rouri, @res_txt, "NEED TO PUT A URI HERE")
+    assert_equal(201, c)
+    assert_equal("Created", r)
+
+    # Retrieve annotation URIs
+    auris1 = @rosrs.get_annotation_stub_uris(@rouri, @res_txt)
+    assert_includes(uri(annuri), auris1)
+    buris1 = @rosrs.get_annotation_body_uris(@rouri, @res_txt)
+    assert_includes(uri(bodyuri1), buris1)
+
+    # Update external annotation
+    c,r,bodyuri2 = @rosrs.update_external_annotation(@rouri, annuri, @res_txt, "NEW URI")
+    assert_equal(c, 200)
+    assert_equal(r, "OK")
+
+    # Retrieve annotation URIs
+    auris2 = @rosrs.get_annotation_stub_uris(@rouri, @res_txt)
+    assert_includes(uri(annuri), auris2)
+    buris2 = @rosrs.get_annotation_body_uris(@rouri, @res_txt)
+    assert_includes(uri(bodyuri2), buris2)
+
+    # Remove annotation
+    code, reason = @rosrs.remove_annotation(annuri)
+    assert_equal(code, 204)
+
+    # Clean up
+    c,r = delete_test_research_object
+  end
+
 
  end
