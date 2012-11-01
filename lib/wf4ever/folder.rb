@@ -1,22 +1,22 @@
-module RO
+module Wf4Ever
 
   # A representation of a folder in a Research Object.
 
   class Folder
 
-    attr_reader :name, :uri
+    attr_reader :research_object, :name, :uri
 
     ##
-    # +rosrs_session+:: A ROSRSSession object, needed to fetch the Folder contents.
-    # +name+::          The display name of the Folder.
-    # +uri+::           The URI for the resource referred to by the Folder.
-    # +options+::       A hash of options:
-    # [:eager_load]     Whether or not to eagerly load the entire Folder hierarchy within in this Folder.
-    def initialize(rosrs_session, name, uri, options = {})
+    # +research_object+:: The Wf4Ever::ResearchObject that aggregates this folder.
+    # +name+::            The display name of the Folder.
+    # +uri+::             The URI for the resource referred to by the Folder.
+    # +options+::         A hash of options:
+    # [:eager_load]       Whether or not to eagerly load the entire Folder hierarchy within in this Folder.
+    def initialize(research_object, name, uri, options = {})
       @name = name
       @uri = uri
-      @session = rosrs_session
-
+      @research_object = research_object
+      @session = research_object.session
       @loaded = false
       @contents = []
       load! if (@eager_load = options[:eager_load])
@@ -74,12 +74,17 @@ module RO
     # Also deletes any entries in other folders pointing to this one.
     def delete!
       @session.delete_folder(@uri)
+      true
     end
 
     ##
     # Add a resource to this folder. The resource must already be present in the RO.
     def add_resource(resource_uri, resource_name = nil)
       @session.add_folder_entry(@uri, resource_uri, resource_name, :parent => self)
+    end
+
+    def self.create(ro, name, contents)
+      @session.create_folder(ro, name, contents)
     end
 
     private
@@ -106,47 +111,12 @@ module RO
       # Create instances for each item.
       graph.query(query).each do |result|
         if result.respond_to? :target_resource_map
-          contents << RO::Folder.new(@session, result.name.to_s, result.target.to_s, :eager_load => @eager_load)
+          contents << Wf4Ever::Folder.new(@research_object, result.name.to_s, result.target.to_s, :eager_load => @eager_load)
         else
-          contents << RO::FolderEntry.new(@session, result.name.to_s, result.target.to_s, result.entry_uri.to_s, self)
+          contents << Wf4Ever::FolderEntry.new(self, result.name.to_s, result.target.to_s, result.entry_uri.to_s)
         end
       end
     end
 
   end
-
-  # An item within a folder.
-
-  class FolderEntry
-
-    attr_reader :name, :uri, :parent, :entry_uri
-
-    ##
-    # +rosrs_session+:: A ROSRSSession object.
-    # +name+:: The display name of the FolderEntry.
-    # +uri+:: The URI for the resource referred to by the FolderEntry.
-    # +entry_uri+:: The URI of the folder entry.
-    # +parent+:: The parent Folder in which this FolderEntry resides.
-    def initialize(rosrs_session, name, uri, entry_uri, parent)
-      @name = name
-      @uri = uri
-      @entry_uri = entry_uri
-      @parent = parent
-      @session = rosrs_session
-    end
-
-    ##
-    # Returns boolean stating whether or not this is a folder. Useful when examining RO::Folder#contents.
-    def folder?
-      false
-    end
-
-    ##
-    # Removes this entry from the folder. The resource it refers to will still exists, however.
-    def delete!
-      @session.remove_folder_entry(@entry_uri)
-    end
-
-  end
-
 end

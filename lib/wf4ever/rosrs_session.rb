@@ -97,6 +97,9 @@ class ROSRSSession
     if options[:accept]
       reqheaders['accept'] = options[:accept]
     end
+    if options[:link]
+      reqheaders['Link'] = options[:link]
+    end
     reqheaders
   end
 
@@ -397,11 +400,14 @@ class ROSRSSession
   #
   # Returns: [code, reason, annotation_uri, body_uri]
   def create_internal_annotation(ro_uri, resource_uri, annotation_graph)
-    code, reason, body_uri = create_annotation_body(ro_uri, annotation_graph)
-    if code == 201
-      code, reason, annotation_uri = create_annotation_stub(ro_uri, resource_uri, body_uri)
+    code, reason, headers, data = do_request("POST", ro_uri,
+        :ctype => "application/rdf+xml",
+        :body  => annotation_graph,
+        :link => "<#{resource_uri}>; rel=\"#{RDF::AO.annotatesResource}\"")
+    if code != 201
+      error("Error creating annotation #{code}, #{reason}, #{resource_uri}")
     end
-    [code, reason, annotation_uri, body_uri]
+    [code, reason, URI(headers["location"]), parse_links(headers)[RDF::AO.body.to_s]]
   end
 
   ##
@@ -470,24 +476,28 @@ class ROSRSSession
   #
   # Returns an array of annotation body URIs
   def get_annotation_body_uris(ro_uri, resource_uri=nil)
+    manifesturi, manifest = get_manifest(ro_uri)
     body_uris = []
-    get_annotation_stub_uris(ro_uri, resource_uri).each do |stuburi|
-      body_uris << get_annotation_body_uri(stuburi)
-    end
-    body_uris
-  end
 
-  ##
-  # Retrieve annotation body URI for given annotation stub URI
-  def get_annotation_body_uri(stuburi)
-    code, reason, headers  = do_request("GET", stuburi, {})
-    if code != 303
-      error("No redirect from annnotation stub URI: #{code} #{reason}, #{stuburi}")
+    query1 = RDF::Query.new do
+      pattern [:annotation_uri, RDF::AO.annotatesResource, RDF::URI(resource_uri)]
+      pattern [:annotation_uri, RDF::AO.body, :body_uri]
     end
-    if [nil,""].include?(headers['location'])
-      error("No location for redirect from annnotation stub URI: #{code} #{reason}, #{stuburi}")
+
+    query2 = RDF::Query.new do
+      pattern [:annotation_uri, RDF::RO.annotatesAggregatedResource, RDF::URI(resource_uri)]
+      pattern [:annotation_uri, RDF::AO.body, :body_uri]
     end
-    RDF::URI(headers['location'])
+
+    manifest.query(query1) do |result|
+      body_uris << result.body_uri.to_s
+    end
+
+    manifest.query(query2) do |result|
+      body_uris << result.body_uri.to_s
+    end
+
+    body_uris.uniq
   end
 
   ##
@@ -497,7 +507,7 @@ class ROSRSSession
   # Returns graph of merged annotations
   def get_annotation_graph(ro_uri, resource_uri=nil)
     annotation_graph = RDFGraph.new
-    get_annotation_stub_uris(ro_uri, resource_uri).each do |auri|
+    get_annotation_body_uris(ro_uri, resource_uri).each do |auri|
       code, reason, headers, buri, bodytext = do_request_follow_redirect("GET", auri, {})
       if code == 200
         content_type = headers['content-type'].split(';', 2)[0].strip.downcase
@@ -517,10 +527,10 @@ class ROSRSSession
   ##
   # Retrieve annotation for given annotation URI
   #
-  # Returns: [code, reason, body_uri, annotation_graph]
-  def get_annotation_body(annotation_uri)
+  # Returns: annotation_graph
+  def get_annotation(annotation_uri)
     code, reason, headers, uri, annotation_graph = get_resource_rdf(annotation_uri)
-    [code, reason, uri, annotation_graph]
+    annotation_graph
   end
 
   ##
@@ -558,7 +568,7 @@ class ROSRSSession
   # Returns an RO::Folder object from the given resource map URI.
   def get_folder(folder_uri, options = {})
     folder_name = options[:name] || folder_uri.to_s.split('/').last
-    RO::Folder.new(self, folder_name, folder_uri, :eager_load => options[:eager_load])
+    Wf4Ever::Folder.new(self, folder_name, folder_uri, :eager_load => options[:eager_load])
   end
 
   ##
@@ -599,7 +609,7 @@ class ROSRSSession
 
     if code == 201
       uri = parse_links(headers)[RDF::ORE.proxyFor.to_s]
-      folder = RO::Folder.new(self, uri.to_s.split('/').last, uri)
+      folder = Wf4Ever::Folder.new(self, uri.to_s.split('/').last, uri)
 
       # Parse folder contents from response
       query = RDF::Query.new do
@@ -610,7 +620,7 @@ class ROSRSSession
       end
 
       folder_contents = folder_description.query(query).collect do |e|
-        RO::FolderEntry.new(self, e.name.to_s, e.target.to_s, e.entry_uri.to_s, folder)
+        Wf4Ever::FolderEntry.new(self, e.name.to_s, e.target.to_s, e.entry_uri.to_s, folder)
       end
 
       folder.set_contents!(folder_contents)
@@ -631,7 +641,7 @@ class ROSRSSession
         :body       => create_folder_entry_description(resource_uri, resource_name),
         :headers    => {"Content-Type" => 'application/vnd.wf4ever.proxy',})
     if code == 201
-      RO::FolderEntry.new(self, resource_name, parse_links(headers)[RDF::ORE.proxyFor.to_s],
+      Wf4Ever::FolderEntry.new(self, resource_name, parse_links(headers)[RDF::ORE.proxyFor.to_s],
                           headers["Location"], options[:folder])
     else
       error("Error adding resource to folder: #{code} #{reason}")
