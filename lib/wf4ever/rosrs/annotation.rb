@@ -1,4 +1,4 @@
-module Wf4Ever
+module ROSRS
   class Annotation
 
     attr_reader :uri, :body_uri, :resource_uri, :created_at, :created_by, :research_object
@@ -49,7 +49,7 @@ module Wf4Ever
     end
 
     def update!(resource_uri, annotation_graph)
-      code, reason, body_uri = @session.update_internal_annotation(ro_uri, uri, resource_uri, annotation_graph)
+      code, reason, body_uri = @session.update_internal_annotation(@research_object.uri, @uri, resource_uri, annotation_graph)
       @resource_uri = resource_uri
       @body_uri = body_uri
       @body = annotation_graph
@@ -58,7 +58,7 @@ module Wf4Ever
     end
 
     def update_remote!(resource_uri, body_uri)
-      code, reason = @session.update_annotation_stub(ro_uri, uri, resource_uri, body_uri)
+      code, reason = @session.update_annotation_stub(@research_object.uri, @uri, resource_uri, body_uri)
       @resource_uri = resource_uri
       @body_uri = body_uri
       @loaded = false

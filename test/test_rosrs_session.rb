@@ -10,7 +10,7 @@ class TestROSRSSession < Test::Unit::TestCase
   #
   class Config
     def self.rosrs_api_uri; "http://sandbox.wf4ever-project.org/rodl/ROs/"; end
-    def self.authorization; "47d5423c-b507-4e1c-8"; end
+    def self.authorization; "32801fc0-1df1-4e34-b"; end
     def self.test_ro_name;  "TestSessionRO_ruby"; end
     def self.test_ro_path; test_ro_name+"/"; end
     def self.test_ro_uri;   rosrs_api_uri+test_ro_path; end
@@ -22,7 +22,7 @@ class TestROSRSSession < Test::Unit::TestCase
 
   def setup
     @rouri = nil
-    @rosrs = ROSRSSession.new(Config.rosrs_api_uri, Config.authorization)
+    @rosrs = ROSRS::Session.new(Config.rosrs_api_uri, Config.authorization)
   end
 
   def teardown
@@ -53,17 +53,17 @@ class TestROSRSSession < Test::Unit::TestCase
   end
 
   def assert_includes(item, list)
-    assert(list.include?(item), "Expected item #{item}")
+    assert(list.include?(item), "Expected item #{item} in list: #{list.inspect}")
   end
 
   def assert_not_includes(item, list)
-    assert(!list.include?(item), "Unexpected item #{item}")
+    assert(!list.include?(item), "Unexpected item #{item} in list: #{list.inspect}")
   end
 
   def create_test_research_object
     c, r = @rosrs.delete_research_object(Config.test_ro_uri)
     c,r,u,m = @rosrs.create_research_object(Config.test_ro_name,
-        "Test RO for ROSRSSession", "TestROSRS_Session.py", "2012-09-28")
+        "Test RO for Session", "TestROSRS_Session.py", "2012-09-28")
     assert_equal(c, 201)
     @rouri = u
     [c,r,u,m]
@@ -119,22 +119,6 @@ class TestROSRSSession < Test::Unit::TestCase
     assert_equal(RDF::URI("http://www.w3.org/2000/01/rdf-schema#seeAlso"), RDF::RDFS.seeAlso)
   end
 
-  #def test_parse_links
-  #  assert_equal(URI('http://example.org/foo'),
-  #               @rosrs.parse_links({'Link' => '<http://example.org/foo>; rel=foo'})['foo'])
-  #  assert_equal({},@rosrs.parse_links({'link' => ' <http://example.org/fie> ; par = fie '}))
-  #  assert_equal(URI('http://example.org/bar'),
-  #               @rosrs.parse_links({'link' => ' <http://example.org/bar> ; rel = bar '})['bar'])
-  #  assert_equal(URI('http://example.org/bas'),
-  #               @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bas'])
-  #  assert_equal(URI('http://example.org/bat'),
-  #               @rosrs.parse_links({'Link' => '<http://example.org/bas>; rel=bas; par = zzz , <http://example.org/bat>; rel = bat'})['bat'])
-  #  assert_equal(URI('http://example.org/fum'),
-  #               @rosrs.parse_links({'Link' => ' <http://example.org/fum> ; rel = "http://example.org/rel/fum" '})['http://example.org/rel/fum'])
-  #  assert_equal(URI('http://example.org/fas;far'),
-  #               @rosrs.parse_links({'link' => ' <http://example.org/fas;far> ; rel = "http://example.org/rel/fas" '})['http://example.org/rel/fas'])
-  #end
-
   def test_create_serialize_graph
     b = %q(
         <rdf:RDF
@@ -146,7 +130,7 @@ class TestROSRSSession < Test::Unit::TestCase
           </ex:Resource>
         </rdf:RDF>
         )
-    g  = RDFGraph.new(:data => b)
+    g  = ROSRS::RDFGraph.new(:data => b)
     b1 = g.serialize(format=:ntriples)
     r1 = %r{<http:/example\.com/res/1> <http://example\.org/foo> <http://example\.com/res/1> \.}
     r2 = %r{<http:/example\.com/res/1> <http://example\.org/bar> "Literal property" \.}
@@ -166,7 +150,7 @@ class TestROSRSSession < Test::Unit::TestCase
           </ex:Resource>
         </rdf:RDF>
         )
-    g  = RDFGraph.new(:data => b)
+    g  = ROSRS::RDFGraph.new(:data => b)
     stmts = []
     g.query([nil, nil, nil]) { |s| stmts << s }
     s1 = stmt([uri("http:/example.com/res/1"),uri("http://example.org/foo"),uri("http://example.com/res/1")])
@@ -259,7 +243,7 @@ class TestROSRSSession < Test::Unit::TestCase
           </ex:Resource>
         </rdf:RDF>
         )
-    g = RDFGraph.new(:data => b)
+    g = ROSRS::RDFGraph.new(:data => b)
     # Create an annotation body from a supplied annnotation graph.
     # Params:  (rouri, anngr)
     # Returns: (status, reason, bodyuri)
@@ -302,7 +286,7 @@ class TestROSRSSession < Test::Unit::TestCase
         </rdf:Description>
       </rdf:RDF>
       )
-    agraph1 = RDFGraph.new(:data => annbody1, :format => :xml)
+    agraph1 = ROSRS::RDFGraph.new(:data => annbody1, :format => :xml)
     c,r,annuri,bodyuri1 = @rosrs.create_internal_annotation(
       @rouri, @res_txt, agraph1)
     assert_equal(201, c)
@@ -341,7 +325,7 @@ class TestROSRSSession < Test::Unit::TestCase
         </rdf:Description>
       </rdf:RDF>
       )
-    agraph2 = RDFGraph.new(:data => annbody2, :format => :xml)
+    agraph2 = ROSRS::RDFGraph.new(:data => annbody2, :format => :xml)
     c,r,bodyuri2 = @rosrs.update_internal_annotation(
       @rouri, annuri, @res_txt, agraph2)
     assert_equal(c, 200)
@@ -377,7 +361,7 @@ class TestROSRSSession < Test::Unit::TestCase
     populate_test_research_object
 
     # Create external annotation on @res_txt
-    c,r,annuri,bodyuri1 = @rosrs.create_external_annotation(@rouri, @res_txt, "NEED TO PUT A URI HERE")
+    c,r,annuri,bodyuri1 = @rosrs.create_external_annotation(@rouri, @res_txt, "http://www.example.com/something")
     assert_equal(201, c)
     assert_equal("Created", r)
 
@@ -388,7 +372,7 @@ class TestROSRSSession < Test::Unit::TestCase
     assert_includes(uri(bodyuri1), buris1)
 
     # Update external annotation
-    c,r,bodyuri2 = @rosrs.update_external_annotation(@rouri, annuri, @res_txt, "NEW URI")
+    c,r,bodyuri2 = @rosrs.update_external_annotation(@rouri, annuri, @res_txt, "http://www.example.com/other")
     assert_equal(c, 200)
     assert_equal(r, "OK")
 

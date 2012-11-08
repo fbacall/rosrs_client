@@ -127,7 +127,7 @@ The `rdf-raptor` Ruby library uses the Ubuntu `raptor-util` and `libraptor-dev` 
 
 Once the environment is set up, I find the following statements are sufficient include the required libraries:
 
-    require "./rosrs_client"
+    require "wf4ever/rosrs_client"
 
 ## URIs
 

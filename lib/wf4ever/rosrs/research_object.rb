@@ -1,4 +1,5 @@
-module Wf4Ever
+module ROSRS
+
   class ResearchObject
 
     attr_reader :uri, :session
@@ -44,6 +45,28 @@ module Wf4Ever
       true
     end
 
+    ##
+    # Create an annotation for a given resource_uri, using the supplied annotation body.
+    def create_annotation(resource_uri, annotation_body)
+      annotation = ROSRS::Annotation.create(self, resource_uri, annotation_body)
+      annotations << annotation
+      annotation
+    end
+
+    ##
+    # Create an annotation for a given resource_uri, using a remote body pointed to by body_uri.
+    def create_remote_annotation(resource_uri, body_uri)
+      annotation = ROSRS::Annotation.create_remote(self, resource_uri, body_uri)
+      annotations << annotation
+      annotation
+    end
+
+    ##
+    # Create a root folder in the research object if one doesn't already exist.
+    def create_folder(name)
+      @session.create_folder(@uri, name)
+    end
+
     private
 
     def extract_annotations
@@ -60,7 +83,7 @@ module Wf4Ever
 
       queries.each do |query|
         @manifest.query(query) do |result|
-            annotations << Wf4Ever::Annotation.new(self,
+            annotations << ROSRS::Annotation.new(self,
                                                    result.annotation_uri.to_s,
                                                    result.body_uri.to_s,
                                                    result.resource_uri.to_s,
@@ -82,7 +105,7 @@ module Wf4Ever
       if result
         folder_uri = result.folder.to_s
         folder_name = folder_uri.to_s.split('/').last
-        Wf4Ever::Folder.new(self, folder_name, folder_uri)
+        ROSRS::Folder.new(self, folder_name, folder_uri)
       else
         nil
       end

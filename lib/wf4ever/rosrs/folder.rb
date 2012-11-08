@@ -1,4 +1,4 @@
-module Wf4Ever
+module ROSRS
 
   # A representation of a folder in a Research Object.
 
@@ -26,12 +26,6 @@ module Wf4Ever
     # Fetch the entry with name +child_name+ from the Folder's contents
     def child(child_name)
       contents.select {|child| child.name == child_name}.first
-    end
-
-    ##
-    # Returns boolean stating whether or not this is a folder. Useful when examining Folder#contents.
-    def folder?
-      true
     end
 
     ##
@@ -79,8 +73,12 @@ module Wf4Ever
 
     ##
     # Add a resource to this folder. The resource must already be present in the RO.
-    def add_resource(resource_uri, resource_name = nil)
+    def add(resource_uri, resource_name = nil)
       @session.add_folder_entry(@uri, resource_uri, resource_name, :parent => self)
+    end
+
+    def remove(entry)
+
     end
 
     def self.create(ro, name, contents)
@@ -111,9 +109,9 @@ module Wf4Ever
       # Create instances for each item.
       graph.query(query).each do |result|
         if result.respond_to? :target_resource_map
-          contents << Wf4Ever::Folder.new(@research_object, result.name.to_s, result.target.to_s, :eager_load => @eager_load)
+          contents << ROSRS::Folder.new(@research_object, result.name.to_s, result.target.to_s, :eager_load => @eager_load)
         else
-          contents << Wf4Ever::FolderEntry.new(self, result.name.to_s, result.target.to_s, result.entry_uri.to_s)
+          contents << ROSRS::FolderEntry.new(self, result.name.to_s, result.target.to_s, result.entry_uri.to_s)
         end
       end
     end
