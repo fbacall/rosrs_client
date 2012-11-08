@@ -28,12 +28,24 @@ module ROSRS
       end
     end
 
-    def error(msg, value=nil)
+    def error(code, msg, value=nil)
       # Raise exception with supplied message and optional value
       if value
         msg += " (#{value})"
       end
-      raise ROSRS::Exception.new("Session::Exception on #@uri #{msg}")
+      msg = "Exception on #@uri #{msg}"
+      case code
+        when 401
+          raise ROSRS::UnauthorizedException.new(msg)
+        when 403
+          raise ROSRS::ForbiddenException.new(msg)
+        when 404
+          raise ROSRS::NotFoundException.new(msg)
+        when 409
+          raise ROSRS::ConflictException.new(msg)
+        else
+          raise ROSRS::Exception.new(msg)
+      end
     end
 
     # -------
@@ -66,11 +78,11 @@ module ROSRS
     def get_request_path(uripath)
       uripath = URI(uripath.to_s)
       if uripath.scheme && (uripath.scheme != @uri.scheme)
-        error("Request URI scheme does not match session: #{uripath}")
+        error(nil, "Request URI scheme does not match session: #{uripath}")
       end
       if (uripath.host && uripath.host != @uri.host) ||
          (uripath.port && uripath.port != @uri.port)
-        error("Request URI host or port does not match session: #{uripath}")
+        error(nil, "Request URI host or port does not match session: #{uripath}")
       end
       requri = URI.join(@uri.to_s, uripath.path).path
       if uripath.query
@@ -132,7 +144,7 @@ module ROSRS
       when 'DELETE'
         req = Net::HTTP::Delete.new(get_request_path(uripath))
       else
-        error("Unrecognized HTTP method #{method}")
+        error(nil, "Unrecognized HTTP method #{method}")
       end
 
       if options[:body]
@@ -210,7 +222,7 @@ module ROSRS
       elsif code == 409
         [code, reason, nil, data]
       else
-        error("Error creating RO: #{code} #{reason}")
+        error(code, "Error creating RO: #{code} #{reason}")
       end
     end
 
@@ -221,7 +233,7 @@ module ROSRS
       if [204, 404].include?(code)
         [code, reason]
       else
-        error("Error deleting RO #{ro_uri}: #{code} #{reason}")
+        error(code, "Error deleting RO #{ro_uri}: #{code} #{reason}")
       end
     end
 
@@ -259,20 +271,20 @@ module ROSRS
         :headers  => reqheaders,
         :body     => proxydata)
       if code != 201
-        error("Error creating aggregation proxy",
+        error(code, "Error creating aggregation proxy",
               "#{code} #{reason} #{respath}")
       end
       proxyuri = URI(headers["location"])
       links    = parse_links(headers)
       resource_uri = links[RDF::ORE.proxyFor.to_s].first
       unless resource_uri
-        error("No ore:proxyFor link in create proxy response",
+        error(code, "No ore:proxyFor link in create proxy response",
               "Proxy URI #{proxyuri}")
       end
       # PUT resource content to indicated URI
       code, reason = do_request("PUT", resource_uri, options)
       unless [200,201].include?(code)
-          error("Error creating aggregated resource content",
+        error(code, "Error creating aggregated resource content",
                 "#{code}, #{reason}, #{respath}")
       end
       [code, reason, proxyuri, resource_uri]
@@ -298,7 +310,7 @@ module ROSRS
       end
       code, reason, headers, uri, data = do_request_follow_redirect("GET", resuriref, options)
       unless [200,404].include?(code)
-        error("Error retrieving RO resource: #{code}, #{reason}, #{resuriref}")
+        error(code, "Error retrieving RO resource: #{code}, #{reason}, #{resuriref}")
       end
       [code, reason, headers, uri, data]
     end
@@ -321,7 +333,7 @@ module ROSRS
       end
       code, reason, headers, uri, data = do_request_rdf("GET", resource_uri, options)
       unless [200,404].include?(code)
-        error("Error retrieving RO resource: #{code}, #{reason}, #{resource_uri}")
+        error(code, "Error retrieving RO resource: #{code}, #{reason}, #{resource_uri}")
       end
       [code, reason, headers, uri, data]
     end
@@ -333,7 +345,7 @@ module ROSRS
     def get_manifest(ro_uri)
       code, reason, headers, uri, data = do_request_rdf("GET", ro_uri)
       if code != 200
-        error("Error retrieving RO manifest: #{code} #{reason}")
+        error(code, "Error retrieving RO manifest: #{code} #{reason}")
       end
       [uri, data]
     end
@@ -351,7 +363,7 @@ module ROSRS
         :ctype => "application/rdf+xml",
         :body  => annotation_graph.serialize(format=:xml))
       if code != 201
-        error("Error creating annotation body resource",
+        error(code, "Error creating annotation body resource",
               "#{code}, #{reason}, #{ro_uri}")
       end
       [code, reason, body_uri]
@@ -391,7 +403,7 @@ module ROSRS
           :ctype => "application/vnd.wf4ever.annotation",
           :body  => annotation)
       if code != 201
-          error("Error creating annotation #{code}, #{reason}, #{resource_uri}")
+        error(code, "Error creating annotation #{code}, #{reason}, #{resource_uri}")
       end
       [code, reason, URI(headers["location"])]
     end
@@ -406,7 +418,7 @@ module ROSRS
           :body  => annotation_graph.serialize(format=:xml),
           :link => "<#{resource_uri}>; rel=\"#{RDF::AO.annotatesResource}\"")
       if code != 201
-        error("Error creating annotation #{code}, #{reason}, #{resource_uri}")
+        error(code, "Error creating annotation #{code}, #{reason}, #{resource_uri}")
       end
       puts parse_links(headers).inspect
       [code, reason, URI(headers["location"]), parse_links(headers)[RDF::AO.body.to_s].first]
@@ -430,7 +442,7 @@ module ROSRS
           :ctype => "application/vnd.wf4ever.annotation",
           :body  => annotation)
       if code != 200
-          error("Error updating annotation #{code}, #{reason}, #{resource_uri}")
+        error(code, "Error updating annotation #{code}, #{reason}, #{resource_uri}")
       end
       [code, reason]
     end
@@ -442,7 +454,7 @@ module ROSRS
     def update_internal_annotation(ro_uri, stuburi, resource_uri, annotation_graph)
       code, reason, body_uri = create_annotation_body(ro_uri, annotation_graph)
       if code != 201
-          error("Error creating annotation #{code}, #{reason}, #{resource_uri}")
+        error(code, "Error creating annotation #{code}, #{reason}, #{resource_uri}")
       end
       code, reason = update_annotation_stub(ro_uri, stuburi, resource_uri, body_uri)
       [code, reason, body_uri]
@@ -520,7 +532,7 @@ module ROSRS
             warn("Warning: #{buri} has unrecognized content-type: #{content_type}")
           end
         else
-          error("Failed to GET #{buri}: #{code} #{reason}")
+          error(code, "Failed to GET #{buri}: #{code} #{reason}")
         end
       end
       annotation_graph
@@ -544,7 +556,7 @@ module ROSRS
       if code == 204
         [code, reason]
       else
-        error("Failed to DELETE annotation #{annotation_uri}: #{code} #{reason}")
+        error(code, "Failed to DELETE annotation #{annotation_uri}: #{code} #{reason}")
       end
     end
 
@@ -590,7 +602,7 @@ module ROSRS
       if code == 201
         parse_folder_description(graph)
       else
-        error("Error getting folder description: #{code} #{reason}")
+        error(code, "Error getting folder description: #{code} #{reason}")
       end
     end
 
@@ -628,13 +640,13 @@ module ROSRS
         folder.set_contents!(folder_contents)
         folder
       else
-        error("Error creating folder: #{code} #{reason}")
+        error(code, "Error creating folder: #{code} #{reason}")
       end
     end
 
     def delete_folder(folder_uri)
       code, reason = do_request("DELETE", folder_uri)
-      error("Error deleting folder #{folder_uri}: #{code} #{reason}") unless [204, 404].include?(code)
+      error(code, "Error deleting folder #{folder_uri}: #{code} #{reason}") unless [204, 404].include?(code)
       [code, reason]
     end
 
@@ -646,13 +658,13 @@ module ROSRS
         ROSRS::FolderEntry.new(self, resource_name, parse_links(headers)[RDF::ORE.proxyFor.to_s].first,
                             headers["Location"], options[:folder])
       else
-        error("Error adding resource to folder: #{code} #{reason}")
+        error(code, "Error adding resource to folder: #{code} #{reason}")
       end
     end
 
     def delete_resource(resource_uri)
       code, reason = do_request("DELETE", resource_uri)
-      error("Error deleting resource #{resource_uri}: #{code} #{reason}") unless code == 204
+      error(code, "Error deleting resource #{resource_uri}: #{code} #{reason}") unless code == 204
       [code, reason]
     end
 
