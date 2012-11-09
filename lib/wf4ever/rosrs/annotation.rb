@@ -9,59 +9,58 @@ module ROSRS
       @uri = uri
       @body_uri = body_uri
       @resource_uri = resource_uri
-      @created_at = created_at
-      @created_by = created_by
+      @created_at = options[:created_at]
+      @created_by = options[:created_by]
+      @resource = options[:resource]
       @loaded = false
       if options[:body]
         @body = options[:body]
         @loaded = true
       end
-      load! if options[:load]
+      load if options[:load]
     end
 
     def loaded?
       @loaded
     end
 
-    def load!
+    def load
       @body = @session.get_annotation(body_uri || uri)
       @loaded = true
     end
 
     def body
-      load! unless loaded?
+      load unless loaded?
       @body
     end
 
-    def delete!
-      @session.remove_annotation(uri)
-      true
-    end
-
-    def self.create(ro, resource_uri, annotation_graph)
-      code, reason, annotation_uri, body_uri = ro.session.create_internal_annotation(ro.uri, resource_uri, annotation_graph)
-      self.new(ro, annotation_uri, body_uri, resource_uri, :body => annotation_graph)
-    end
-
-    def self.create_remote(ro, resource_uri, body_uri)
-      code, reason, annotation_uri = ro.session.create_annotation_stub(ro.uri, resource_uri, body_uri)
-      self.new(ro, annotation_uri, body_uri, resource_uri)
-    end
-
-    def update!(resource_uri, annotation_graph)
-      code, reason, body_uri = @session.update_internal_annotation(@research_object.uri, @uri, resource_uri, annotation_graph)
-      @resource_uri = resource_uri
-      @body_uri = body_uri
-      @body = annotation_graph
-      @loaded = true
-      self
-    end
-
-    def update_remote!(resource_uri, body_uri)
-      code, reason = @session.update_annotation_stub(@research_object.uri, @uri, resource_uri, body_uri)
-      @resource_uri = resource_uri
-      @body_uri = body_uri
+    def delete
+      code = @session.remove_annotation(uri)
       @loaded = false
+      code == 204
+    end
+
+    def self.create(ro, resource_uri, annotation)
+      if ROSRS::Helper.is_uri?(annotation)
+        code, reason, annotation_uri = ro.session.create_annotation_stub(ro.uri, resource_uri, annotation)
+        self.new(ro, annotation_uri, annotation, resource_uri)
+      else
+        code, reason, annotation_uri, body_uri = ro.session.create_internal_annotation(ro.uri, resource_uri, annotation)
+        self.new(ro, annotation_uri, body_uri, resource_uri, :body => annotation)
+      end
+    end
+
+    def update(resource_uri, annotation)
+      if ROSRS::Helper.is_uri?(annotation)
+        code, reason = @session.update_annotation_stub(@research_object.uri, @uri, resource_uri, body_uri)
+        @loaded = false
+      else
+        code, reason, body_uri = @session.update_internal_annotation(@research_object.uri, @uri, resource_uri, annotation)
+        @loaded = true
+        @body = annotation
+      end
+      @resource_uri = resource_uri
+      @body_uri = body_uri
       self
     end
 

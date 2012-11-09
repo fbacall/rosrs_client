@@ -219,8 +219,6 @@ module ROSRS
           :headers    => reqheaders)
       if code == 201
         [code, reason, headers["location"], data]
-      elsif code == 409
-        [code, reason, nil, data]
       else
         error(code, "Error creating RO: #{code} #{reason}")
       end
@@ -613,7 +611,7 @@ module ROSRS
     #                      {:uri => 'http://www.myexperiment.org/workflows/7'}]
     #   create_folder('ros/new_ro/', 'example_data', folder_contents)
     #
-    # Returns the created folder as an RO::Folder object
+    # Returns [code, reason, uri, folder_description]
     def create_folder(ro_uri, name, contents = [])
       code, reason, headers, uripath, folder_description = do_request_rdf("POST", ro_uri,
           :body       => create_folder_description(contents),
@@ -623,22 +621,7 @@ module ROSRS
 
       if code == 201
         uri = parse_links(headers)[RDF::ORE.proxyFor.to_s].first
-        folder = ROSRS::Folder.new(self, uri.to_s.split('/').last, uri)
-
-        # Parse folder contents from response
-        query = RDF::Query.new do
-          pattern [:folder_entry, RDF.type, RDF.Description]
-          pattern [:folder_entry, RDF::RO.entryName, :name]
-          pattern [:folder_entry, RDF::ORE.proxyFor, :target]
-          #pattern [:folder_entry, SOMETHING, :entry_uri]
-        end
-
-        folder_contents = folder_description.query(query).collect do |e|
-          ROSRS::FolderEntry.new(self, e.name.to_s, e.target.to_s, e.entry_uri.to_s, folder)
-        end
-
-        folder.set_contents!(folder_contents)
-        folder
+        [code, reason, uri, folder_description]
       else
         error(code, "Error creating folder: #{code} #{reason}")
       end
@@ -650,21 +633,20 @@ module ROSRS
       [code, reason]
     end
 
-    def add_folder_entry(folder_uri, resource_uri, resource_name = nil, options = {})
+    def add_folder_entry(folder_uri, resource_uri, resource_name = nil)
       code, reason, headers, body= do_request("POST", folder_uri,
           :body       => create_folder_entry_description(resource_uri, resource_name),
-          :headers    => {"Content-Type" => 'application/vnd.wf4ever.proxy',})
+          :headers    => {"Content-Type" => 'application/vnd.wf4ever.folderentry',})
       if code == 201
-        ROSRS::FolderEntry.new(self, resource_name, parse_links(headers)[RDF::ORE.proxyFor.to_s].first,
-                            headers["Location"], options[:folder])
+        [code, reason, headers["Location"], parse_links(headers)[RDF::ORE.proxyFor.to_s].first]
       else
         error(code, "Error adding resource to folder: #{code} #{reason}")
       end
     end
 
     def delete_resource(resource_uri)
-      code, reason = do_request("DELETE", resource_uri)
-      error(code, "Error deleting resource #{resource_uri}: #{code} #{reason}") unless code == 204
+      code, reason = do_request_follow_redirect("DELETE", resource_uri)
+      error(code, "Error deleting resource #{resource_uri}: #{code} #{reason}") unless [204,404].include?(code)
       [code, reason]
     end
 

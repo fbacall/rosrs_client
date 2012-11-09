@@ -2,7 +2,7 @@ module ROSRS
 
   # An item within a folder.
 
-  class FolderEntry < Resource
+  class FolderEntry
 
     attr_reader :parent_folder, :name, :uri, :resource_uri
 
@@ -13,18 +13,27 @@ module ROSRS
     # +resource_uri+::  The URI for the resource referred to by this ROSRS::FolderEntry.
     # +folder+::        (Optional) The ROSRS::Folder that this entry points to, if applicable.
     def initialize(parent_folder, name, uri, resource_uri, folder = nil)
-      super(folder.research_object, uri, resource_uri)
+      @uri = uri
       @name = name
       @folder = folder
-      @is_folder = !options[:folder].nil?
-      @resource = options[:folder]
-      @session = @folder.research_object.session
+      @parent_folder = parent_folder
+      @session = @parent_folder.research_object.session
+      @resource_uri = resource_uri
+    end
+
+    def resource
+      ROSRS::Resource.new(@parent_folder.research_object, @resource_uri)
     end
 
     ##
     # Returns boolean stating whether or not this entry points to a folder
-    def folder?
-      @is_folder
+    #def folder?
+    #  @is_folder
+    #end
+
+    def self.create(parent_folder, name, resource_uri)
+      code, reason, uri = parent_folder.research_object.session.add_folder_entry(parent_folder.uri, resource_uri, name)
+      self.new(parent_folder, name, uri, resource_uri)
     end
 
   end

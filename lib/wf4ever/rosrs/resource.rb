@@ -3,7 +3,7 @@ module ROSRS
   class Resource
     attr_reader :uri, :proxy_uri
 
-    def initialize(research_object, uri, proxy_uri, external = false)
+    def initialize(research_object, uri, proxy_uri = nil, external = false)
       @research_object = research_object
       @uri = uri
       @proxy_uri = proxy_uri
@@ -13,12 +13,13 @@ module ROSRS
 
     ##
     # Removes this resource from the Research Object.
-    def delete!
+    def delete
       if internal?
-        @session.remove_resource(@uri)
+        @session.delete_resource(@uri)
       elsif external?
-        @session.remove_resource(@proxy_uri)
+        @session.delete_resource(@proxy_uri)
       end
+      @loaded = false
       true
     end
 

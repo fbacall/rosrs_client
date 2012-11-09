@@ -12,8 +12,9 @@ require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'session'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'exceptions'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'research_object'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'annotation'))
-require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs',  'resource'))
+require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'resource'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'folder'))
 require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'folder_entry'))
+require File.expand_path(File.join(File.dirname(__FILE__), 'rosrs', 'helper'))
 
 
