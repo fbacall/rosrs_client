@@ -4,7 +4,7 @@ module ROSRS
 
   class FolderEntry
 
-    attr_reader :parent_folder, :name, :uri, :resource_uri
+    attr_reader :parent_folder, :name, :uri, :resource
 
     ##
     # +parent_folder+:: The ROSRS::Folder object in which this entry resides..
@@ -18,11 +18,16 @@ module ROSRS
       @folder = folder
       @parent_folder = parent_folder
       @session = @parent_folder.research_object.session
-      @resource_uri = resource_uri
+      @resource = @parent_folder.research_object.resources(resource_uri) ||
+                  ROSRS::Resource.new(@parent_folder.research_object, resource_uri)
     end
 
-    def resource
-      ROSRS::Resource.new(@parent_folder.research_object, @resource_uri)
+    ##
+    # Removes this folder entry from the folder. Does not delete the resource.
+    def delete
+      code = @session.delete_resource(@uri)[0]
+      @loaded = false
+      code == 204
     end
 
     ##

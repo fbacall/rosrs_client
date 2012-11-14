@@ -3,7 +3,7 @@ module ROSRS
 
     attr_reader :uri, :body_uri, :resource_uri, :created_at, :created_by, :research_object
 
-    def initialize(research_object, uri, body_uri, resource_uri, created_at = nil, created_by = nil, options = {})
+    def initialize(research_object, uri, body_uri, resource_uri, options = {})
       @research_object = research_object
       @session = @research_object.session
       @uri = uri
@@ -25,7 +25,7 @@ module ROSRS
     end
 
     def load
-      @body = @session.get_annotation(body_uri || uri)
+      c,r,u,@body = @session.get_annotation(body_uri || uri)
       @loaded = true
     end
 

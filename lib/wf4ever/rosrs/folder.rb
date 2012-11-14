@@ -62,19 +62,27 @@ module ROSRS
     # Delete this folder from the RO. Contents will be preserved.
     # Also deletes any entries in other folders pointing to this one.
     def delete
-      code = @session.delete_folder(@uri)
+      code = @session.delete_folder(@uri)[0]
       @loaded = false
       code == 204
     end
 
     ##
-    # Add a resource to this folder. The resource must already be present in the RO.
-    def add(resource_uri, entry_name = nil)
-      contents << ROSRS::FolderEntry.create(self, entry_name, resource_uri)
+    # Add an entry to the folder. The resource must already be present in the RO.
+    def add(resource, entry_name = nil)
+      if resource.is_a?(ROSRS::Resource)
+        contents << ROSRS::FolderEntry.create(self, entry_name, resource.uri)
+      else
+        contents << ROSRS::FolderEntry.create(self, entry_name || resource.name, resource)
+      end
+
     end
 
+    ##
+    # Remove an entry from the folder.
     def remove(entry)
-
+      entry.delete
+      contents.delete(entry)
     end
 
     ##
@@ -119,6 +127,8 @@ module ROSRS
           contents << ROSRS::FolderEntry.new(self, result.name.to_s, result.folder_entry.to_s, result.target.to_s)
       #  end
       end
+
+      contents
     end
 
   end

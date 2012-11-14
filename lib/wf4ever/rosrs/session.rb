@@ -2,6 +2,8 @@
 module ROSRS
   class Session
 
+    attr_reader :uri
+
     ANNOTATION_CONTENT_TYPES =
       { "application/rdf+xml" => :xml,
         "text/turtle"         => :turtle,
@@ -64,7 +66,7 @@ module ROSRS
         matches = link.strip.match(/<([^>]*)>\s*;.*rel\s*=\s*"?([^;"]*)"?/)
         if matches
           links[matches[2]] ||= []
-          links[matches[2]] << URI(matches[1])
+          links[matches[2]] << matches[1]
         end
       end
       links
@@ -182,16 +184,11 @@ module ROSRS
       options[:accept] ||= "application/rdf+xml"
       code, reason, headers, uripath, data = do_request_follow_redirect(method, uripath, options)
       if code >= 200 and code < 300
-        if headers["content-type"].downcase == options[:accept]
-          begin
-            data = ROSRS::RDFGraph.new(:data => data, :format => :xml)
-          rescue Exception => e
-            code = 902
-            reason = "RDF parse failure (#{e.message})"
-          end
-        else
-          code = 901
-          reason = "Non-RDF content-type returned (#{headers["content-type"]})"
+        begin
+          data = ROSRS::RDFGraph.new(:data => data, :format => :xml)
+        rescue Exception => e
+          code = 902
+          reason = "RDF parse failure (#{e.message})"
         end
       end
       [code, reason, headers, uripath, data]
@@ -203,20 +200,9 @@ module ROSRS
 
     ##
     # Returns [copde, reason, uri, manifest]
-    def create_research_object(name, title, creator, date)
-      reqheaders   = {
-          "slug"    => name
-          }
-      roinfo = {
-          "id"      => name,
-          "title"   => title,
-          "creator" => creator,
-          "date"    => date
-          }
-      roinfotext = roinfo.to_json
+    def create_research_object(name)
       code, reason, headers, uripath, data = do_request_rdf("POST", "",
-          :body       => roinfotext,
-          :headers    => reqheaders)
+          :headers    => {'slug' => name})
       if code == 201
         [code, reason, headers["location"], data]
       else
@@ -251,41 +237,47 @@ module ROSRS
     # Returns: [code, reason, proxyuri, resource_uri], where code is 200 or 201
 
     def aggregate_internal_resource(ro_uri, respath=nil, options={})
-        # POST (empty) proxy value to RO ...
-      reqheaders = options[:headers] || {}
       if respath
-        reqheaders['slug'] = respath
+        options[:headers] ||= {}
+        options[:headers]['slug'] = respath
       end
-      proxydata = %q(
+      # POST resource content to indicated URI
+      code, reason, headers = do_request("POST", ro_uri, options)
+      unless [200,201].include?(code)
+        error(code, "Error creating aggregated resource content",
+                "#{code}, #{reason}, #{respath}")
+      end
+      proxyuri = headers["location"]
+      resource_uri = parse_links(headers)[RDF::ORE.proxyFor.to_s].first
+      [code, reason, proxyuri, resource_uri]
+    end
+
+
+    ##
+    # Aggregate external resource
+    #
+    # Returns: [code, reason, proxyuri, resource_uri], where code is 200 or 201
+    def aggregate_external_resource(ro_uri, resource_uri=nil)
+      proxydata = %(
         <rdf:RDF
           xmlns:ore="http://www.openarchives.org/ore/terms/"
           xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" >
           <ore:Proxy>
+            <ore:proxyFor rdf:resource="#{resource_uri}"/>
           </ore:Proxy>
         </rdf:RDF>
         )
       code, reason, headers = do_request("POST", ro_uri,
         :ctype    => "application/vnd.wf4ever.proxy",
-        :headers  => reqheaders,
         :body     => proxydata)
       if code != 201
         error(code, "Error creating aggregation proxy",
-              "#{code} #{reason} #{respath}")
+              "#{code} #{reason} #{resource_uri}")
+      else
+        proxyuri = headers["location"]
+        resuri = parse_links(headers)[RDF::ORE.proxyFor.to_s].first
+        [code, reason, proxyuri, resuri]
       end
-      proxyuri = URI(headers["location"])
-      links    = parse_links(headers)
-      resource_uri = links[RDF::ORE.proxyFor.to_s].first
-      unless resource_uri
-        error(code, "No ore:proxyFor link in create proxy response",
-              "Proxy URI #{proxyuri}")
-      end
-      # PUT resource content to indicated URI
-      code, reason = do_request("PUT", resource_uri, options)
-      unless [200,201].include?(code)
-        error(code, "Error creating aggregated resource content",
-                "#{code}, #{reason}, #{respath}")
-      end
-      [code, reason, proxyuri, resource_uri]
     end
 
     # -----------------------
@@ -403,7 +395,7 @@ module ROSRS
       if code != 201
         error(code, "Error creating annotation #{code}, #{reason}, #{resource_uri}")
       end
-      [code, reason, URI(headers["location"])]
+      [code, reason, headers["location"]]
     end
 
     ##
@@ -418,8 +410,7 @@ module ROSRS
       if code != 201
         error(code, "Error creating annotation #{code}, #{reason}, #{resource_uri}")
       end
-      puts parse_links(headers).inspect
-      [code, reason, URI(headers["location"]), parse_links(headers)[RDF::AO.body.to_s].first]
+      [code, reason, headers["location"], parse_links(headers)[RDF::AO.body.to_s].first]
     end
 
     ##
@@ -539,10 +530,10 @@ module ROSRS
     ##
     # Retrieve annotation for given annotation URI
     #
-    # Returns: annotation_graph
+    # Returns: [code, reason, uri, annotation_graph]
     def get_annotation(annotation_uri)
       code, reason, headers, uri, annotation_graph = get_resource_rdf(annotation_uri)
-      annotation_graph
+      [code, reason, uri, annotation_graph]
     end
 
     ##
@@ -638,6 +629,10 @@ module ROSRS
           :body       => create_folder_entry_description(resource_uri, resource_name),
           :headers    => {"Content-Type" => 'application/vnd.wf4ever.folderentry',})
       if code == 201
+        puts code
+        puts reason
+        puts headers["location"]
+        puts headers["link"]
         [code, reason, headers["Location"], parse_links(headers)[RDF::ORE.proxyFor.to_s].first]
       else
         error(code, "Error adding resource to folder: #{code} #{reason}")

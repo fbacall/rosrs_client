@@ -6,24 +6,33 @@ module ROSRS
 
     def initialize(rosrs_session, uri)
       @session = rosrs_session
+      if URI(uri).relative?
+        uri = (rosrs_session.uri + URI(uri)).to_s
+      end
       @uri = uri
+      @uri << '/' unless uri[-1] == '/'
       @loaded = false
     end
 
-    def self.create(session, name, description, creator, date = Time.now.strftime("%Y-%m-%d"))
-      c,r,u,m = session.create_research_object(name, description, creator, date)
+    def self.create(session, name)
+      c,r,u,m = session.create_research_object(name)
       self.new(session, u)
     end
 
+    ##
+    # Has this RO's manifest been fetched and parsed?
     def loaded?
       @loaded
     end
 
+    ##
+    # Fetch and parse the RO manifest
     def load
       manifest_uri, @manifest = @session.get_manifest(uri)
       @resources = extract_resources
       @annotations = extract_annotations
       @root_folder = extract_root_folder
+      @folders = extract_folders
       @loaded = true
     end
 
@@ -32,27 +41,53 @@ module ROSRS
       @manifest
     end
 
+    ##
+    # Get Annotations in this RO for the given resource_uri.
+    # If resource_uri is nil, get the Annotations on the RO itself.
     def annotations(resource_uri = nil)
       load unless loaded?
       if resource_uri.nil?
-        @annotations.values
+        @annotations[@uri]
       else
         @annotations[resource_uri] || []
       end
     end
 
-    def resources
+    ##
+    # Return the Resource object for the given resource_uri, if it exists.
+    # If resource_uri is nil, return all Resources in the RO.
+    def resources(resource_uri = nil)
       load unless loaded?
-      @resources.values
+      if resource_uri.nil?
+        @resources.values
+      else
+        @resources[resource_uri]
+      end
     end
 
+    ##
+    # Return the Folder object for the given resource_uri, if it exists.
+    # If resource_uri is nil, return all Folder in the RO.
+    def folders(resource_uri = nil)
+      load unless loaded?
+      if resource_uri.nil?
+        @folders.values
+      else
+        @folders[resource_uri]
+      end
+    end
+
+    ##
+    # Return the root folder of the RO.
     def root_folder
       load unless loaded?
       @root_folder
     end
 
-    def delete!
-      code = @session.delete_research_object(uri)
+    ##
+    # Delete this RO from the repository
+    def delete
+      code = @session.delete_research_object(@uri)[0]
       @loaded = false
       code == 204
     end
@@ -61,7 +96,8 @@ module ROSRS
     # Create an annotation for a given resource_uri, using the supplied annotation body.
     def create_annotation(resource_uri, annotation)
       annotation = ROSRS::Annotation.create(self, resource_uri, annotation)
-      annotations << annotation
+      @annotations[resource_uri] ||= []
+      @annotations[resource_uri] << annotation
       annotation
     end
 
@@ -72,15 +108,26 @@ module ROSRS
     end
 
     ##
-    # Aggregate a given resource
-    def add
-      raise("Unimplemented") #TODO: Finish
+    # Aggregate an internal resource
+    def aggregate_internal(name, body, content_type = 'text/plain')
+      resource = ROSRS::Resource.create_internal(self, name, body, content_type)
+      load unless loaded?
+      @resources[resource.uri] = resource
+    end
+
+    ##
+    # Aggregate an internal resource
+    def aggregate_external(uri)
+      resource = ROSRS::Resource.create_external(self, uri)
+      load unless loaded?
+      @resources[resource.uri] = resource
     end
 
     ##
     # Remove the chosen resource from the RO
-    def remove
-      raise("Unimplemented") #TODO: Finish
+    def remove(resource)
+      resource.delete
+      @resources.delete(resource.uri)
     end
 
     private
@@ -115,17 +162,38 @@ module ROSRS
       annotations
     end
 
-    def extract_root_folder
+    def extract_folders
+      folders = {}
+
       query = RDF::Query.new do
-        pattern [:research_object, RDF::RO.rootFolder,  :folder]
-        pattern [:folder, RDF::ORE.isDescribedBy, :folder_resource_map]
+        pattern [:research_object, RDF::ORE.aggregates, :folder]
+        pattern [:folder, RDF.type, RDF::RO.Folder]
       end
 
       result = @manifest.query(query).first
       if result
         folder_uri = result.folder.to_s
         folder_name = folder_uri.to_s.split('/').last
-        ROSRS::Folder.new(self, folder_name, folder_uri)
+        folders[folder_uri] = ROSRS::Folder.new(self, folder_name, folder_uri)
+      else
+        nil
+      end
+      folders.delete(@root_folder)
+      folders
+    end
+
+    def extract_root_folder
+      query = RDF::Query.new do
+        pattern [:research_object, RDF::ORE.aggregates, :folder]
+        pattern [:research_object, RDF::RO.rootFolder, :folder]
+        pattern [:folder, RDF.type, RDF::RO.Folder]
+      end
+
+      result = @manifest.query(query).first
+      if result
+        folder_uri = result.folder.to_s
+        folder_name = folder_uri.to_s.split('/').last
+        ROSRS::Folder.new(self, folder_name, folder_uri, :root_folder => true)
       else
         nil
       end
@@ -137,12 +205,12 @@ module ROSRS
       query = RDF::Query.new do
         pattern [:research_object, RDF::ORE.aggregates, :resource]
         pattern [:resource, RDF.type, RDF::RO.Resource]
-        pattern [:resource, RDF::RO.name, :name]
+        #pattern [:resource, RDF::RO.name, :name]
         pattern [:proxy_uri, RDF::ORE.proxyFor, :resource]
       end
 
       @manifest.query(query).each do |result|
-        resource[result.resource.to_s] = ROSRS::Resource.new(self, result.resource.to_s, result.proxy_uri.to_s)
+        resources[result.resource.to_s] = ROSRS::Resource.new(self, result.resource.to_s, result.proxy_uri.to_s)
       end
 
       resources
