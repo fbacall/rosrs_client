@@ -77,6 +77,7 @@ class TestAbstractInteraction < Test::Unit::TestCase
     resource_uris = @ro.resources.collect {|r| r.uri}
     assert_not_include(resource_uris, external_resource.uri)
     assert_include(resource_uris, internal_resource.uri)
+
     internal_resource.delete
     assert_equal(0, @ro.resources.size)
 

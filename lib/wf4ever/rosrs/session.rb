@@ -13,6 +13,10 @@ module ROSRS
         #"application/xhtml"   => :rdfa,
       }
 
+    PARSEABLE_CONTENT_TYPES = ['application/vnd.wf4ever.folderentry',
+                               'application/vnd.wf4ever.folder',
+                               'application/rdf+xml']
+
     # -------------
     # General setup
     # -------------
@@ -299,6 +303,9 @@ module ROSRS
         resuriref = URI.join(ro_uri.to_s, resuriref.to_s)
       end
       code, reason, headers, uri, data = do_request_follow_redirect("GET", resuriref, options)
+      if parseable?(headers["content-type"])
+        data = ROSRS::RDFGraph.new(:data => data, :format => :xml)
+      end
       unless [200,404].include?(code)
         error(code, "Error retrieving RO resource: #{code}, #{reason}, #{resuriref}")
       end
@@ -532,7 +539,7 @@ module ROSRS
     #
     # Returns: [code, reason, uri, annotation_graph]
     def get_annotation(annotation_uri)
-      code, reason, headers, uri, annotation_graph = get_resource_rdf(annotation_uri)
+      code, reason, headers, uri, annotation_graph = get_resource(annotation_uri)
       [code, reason, uri, annotation_graph]
     end
 
@@ -604,6 +611,10 @@ module ROSRS
     end
 
     private
+
+    def parseable?(content_type)
+      PARSEABLE_CONTENT_TYPES.include?(content_type.downcase)
+    end
 
     ##
     # Takes +contents+, an Array containing Hash elements, which must consist of a :uri and an optional :name,
