@@ -19,6 +19,7 @@ module ROSRS
       @parent_folder = parent_folder
       @session = @parent_folder.research_object.session
       @resource = @parent_folder.research_object.resources(resource_uri) ||
+                  @parent_folder.research_object.folders(resource_uri) ||
                   ROSRS::Resource.new(@parent_folder.research_object, resource_uri)
     end
 

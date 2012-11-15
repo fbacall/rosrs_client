@@ -46,9 +46,9 @@ class TestAbstractInteraction < Test::Unit::TestCase
   def test_aggregating_resources
     # Check can add resources
     assert_equal(0, @ro.resources.size)
-    external = @ro.aggregate_external("http://www.google.com")
+    external = @ro.aggregate("http://www.google.com")
     assert_equal(1, @ro.resources.size)
-    internal = @ro.aggregate_internal('text_example.txt', "Hello world", 'text/plain')
+    internal = @ro.aggregate('text_example.txt', "Hello world", 'text/plain')
     assert_equal(2, @ro.resources.size)
 
     # Check still there after reloading and parsing manifest
@@ -77,28 +77,30 @@ class TestAbstractInteraction < Test::Unit::TestCase
     resource_uris = @ro.resources.collect {|r| r.uri}
     assert_not_include(resource_uris, external_resource.uri)
     assert_include(resource_uris, internal_resource.uri)
+    internal_resource.delete
+    assert_equal(0, @ro.resources.size)
 
     # And check after reloading manifest
     @ro.load
-    assert_equal(1, @ro.resources.size)
-    resource_uris = @ro.resources.collect {|r| r.uri}
-    assert_not_include(resource_uris, external_resource.uri)
-    assert_include(resource_uris, internal_resource.uri)
+    assert_equal(0, @ro.resources.size)
   end
 
   def test_annotating_resources
     # Check can add annotations
-    external = @ro.aggregate_external("http://www.google.com")
-    internal = @ro.aggregate_internal('text_example.txt', "Hello world", 'text/plain')
+    external = @ro.aggregate("http://www.google.com")
+    internal = @ro.aggregate('text_example.txt', "Hello world", 'text/plain')
     assert_equal(0, external.annotations.size)
     assert_equal(0, internal.annotations.size)
+
     # Create some annotations
     remote_annotation = internal.annotate("http://www.example.com/annotation")
     body = create_annotation_body(@ro.uri, external.uri)
     local_annotation = external.annotate(body)
+
     # Check added to local object
     assert_equal(1, external.annotations.size)
     assert_equal(1, internal.annotations.size)
+
     # Reload RO by fetching and parsing manifest
     @ro.load
     # Check annotations still there
@@ -106,11 +108,45 @@ class TestAbstractInteraction < Test::Unit::TestCase
     internal = @ro.resources.select {|r| r.uri == internal.uri}.first
     assert_equal(1, external.annotations.size)
     assert_equal(1, internal.annotations.size)
+
     # Check annotations content is the same
     assert_equal(remote_annotation.uri, internal.annotations.first.uri)
     assert_equal(remote_annotation.body_uri, internal.annotations.first.body_uri)
     assert_equal(local_annotation.uri, external.annotations.first.uri)
     assert_equal(local_annotation.body_uri, external.annotations.first.body_uri)
+  end
+
+  def test_adding_to_a_folder
+    # Aggregate some resources
+    external = @ro.aggregate("http://www.google.com")
+    internal = @ro.aggregate('text_example.txt', "Hello world", 'text/plain')
+
+    # Create a folder
+    folder = @ro.create_folder("test_root")
+    assert_not_nil(@ro.root_folder)
+
+    # Add the resources to the folder
+    assert_equal(0, folder.contents)
+    folder.add(external, "Google")
+    assert_equal(1, folder.contents)
+    folder.add(internal, "great_expectations.txt")
+    assert_equal(2, folder.contents)
+
+    # Check folder entries point to same resource
+    folder_resources = folder.contents.collect {|fe| fe.resource}
+    assert_includes(folder_resources, external)
+    assert_includes(folder_resources, internal)
+
+    # Reload folder
+    folder.load!
+    # Check contents the same
+    assert_equal(2, folder.contents)
+    folder_entry_names = folder.contents.collect {|fe| fe.name}
+    assert_include(folder_entry_names, "Google")
+    assert_include(folder_entry_names, "great_expectations.txt")
+    folder_resource_uris = folder.contents.collect {|fe| fe.resource.uri}
+    assert_include(folder_resource_uris, external.uri)
+    assert_include(folder_resource_uris, internal.uri)
   end
 
   private
@@ -124,8 +160,8 @@ class TestAbstractInteraction < Test::Unit::TestCase
          xml:base="#{ro_uri}"
       >
         <rdf:Description rdf:about="#{resource_uri}">
-        <dct:title>Title 1</dct:title>
-        <rdfs:seeAlso rdf:resource="http://example.org/test1" />
+          <dct:title>Title 1</dct:title>
+          <rdfs:seeAlso rdf:resource="http://example.org/test1" />
         </rdf:Description>
       </rdf:RDF>
       )

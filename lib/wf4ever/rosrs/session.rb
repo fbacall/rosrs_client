@@ -550,49 +550,15 @@ module ROSRS
     end
 
     # -----------------------
-    # Folder manipulation
+    # Folders
     # -----------------------
 
     ##
-    # Returns an array of the given research object's root folders, as Folder objects.
-    def get_root_folder(ro_uri, options = {})
-      uri, data = get_manifest(ro_uri)
-      query = RDF::Query.new do
-        pattern [:research_object, RDF::RO.rootFolder,  :folder]
-        pattern [:folder, RDF::ORE.isDescribedBy, :folder_resource_map]
-      end
-
-      result = data.query(query).first
-
-      get_folder(result.folder_resource_map.to_s, options.merge({:name => result.folder.to_s}))
-    end
-
-    ##
-    # Returns an RO::Folder object from the given resource map URI.
-    def get_folder(folder_uri, options = {})
-      folder_name = options[:name] || folder_uri.to_s.split('/').last
-      ROSRS::Folder.new(self, folder_name, folder_uri, :eager_load => options[:eager_load])
-    end
-
-    ##
-    # Returns an array of the given research object's root folders, as RO::Folder objects.
-    # These folders have their contents pre-loaded
-    # and the full hierarchy can be traversed without making further requests
-    def get_folder_hierarchy(ro_uri, options = {})
-      options[:eager_load] = true
-      get_root_folder(ro_uri, options)
-    end
-
-    ##
-    # Takes a folder URI and returns a it's description in RDF
-    def get_folder_description(folder_uri)
-      code, reason, headers, uripath, graph = do_request_rdf("GET", folder_uri,
-                                                             :accept => 'application/vnd.wf4ever.folder')
-      if code == 201
-        parse_folder_description(graph)
-      else
-        error(code, "Error getting folder description: #{code} #{reason}")
-      end
+    # Returns [code, reason, headers, uri, folder_contents]
+    def get_folder(folder_uri)
+      code, reason, headers, uri, folder_contents = @session.do_request_rdf("GET", folder_uri,
+                                                                            :accept => 'application/vnd.wf4ever.folder')
+      [code, reason, headers, uri, folder_contents]
     end
 
     ##
@@ -602,7 +568,7 @@ module ROSRS
     #                      {:uri => 'http://www.myexperiment.org/workflows/7'}]
     #   create_folder('ros/new_ro/', 'example_data', folder_contents)
     #
-    # Returns [code, reason, uri, folder_description]
+    # Returns [code, reason, uri, proxy_uri, folder_description_graph]
     def create_folder(ro_uri, name, contents = [])
       code, reason, headers, uripath, folder_description = do_request_rdf("POST", ro_uri,
           :body       => create_folder_description(contents),
@@ -612,16 +578,10 @@ module ROSRS
 
       if code == 201
         uri = parse_links(headers)[RDF::ORE.proxyFor.to_s].first
-        [code, reason, uri, folder_description]
+        [code, reason, uri, headers["location"], folder_description]
       else
         error(code, "Error creating folder: #{code} #{reason}")
       end
-    end
-
-    def delete_folder(folder_uri)
-      code, reason = do_request("DELETE", folder_uri)
-      error(code, "Error deleting folder #{folder_uri}: #{code} #{reason}") unless [204, 404].include?(code)
-      [code, reason]
     end
 
     def add_folder_entry(folder_uri, resource_uri, resource_name = nil)
@@ -629,15 +589,13 @@ module ROSRS
           :body       => create_folder_entry_description(resource_uri, resource_name),
           :headers    => {"Content-Type" => 'application/vnd.wf4ever.folderentry',})
       if code == 201
-        puts code
-        puts reason
-        puts headers["location"]
-        puts headers["link"]
         [code, reason, headers["Location"], parse_links(headers)[RDF::ORE.proxyFor.to_s].first]
       else
         error(code, "Error adding resource to folder: #{code} #{reason}")
       end
     end
+
+    #--------
 
     def delete_resource(resource_uri)
       code, reason = do_request_follow_redirect("DELETE", resource_uri)

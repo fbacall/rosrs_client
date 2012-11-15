@@ -11,13 +11,18 @@ module ROSRS
       @resource_uri = resource_uri
       @created_at = options[:created_at]
       @created_by = options[:created_by]
-      @resource = options[:resource]
       @loaded = false
       if options[:body]
         @body = options[:body]
         @loaded = true
       end
       load if options[:load]
+    end
+
+    ##
+    # The resource which this annotation relates to
+    def resource
+      @research_object.resources(resource_uri)
     end
 
     def loaded?
@@ -37,6 +42,7 @@ module ROSRS
     def delete
       code = @session.remove_annotation(uri)
       @loaded = false
+      @research_object.remove_annotation(self)
       code == 204
     end
 

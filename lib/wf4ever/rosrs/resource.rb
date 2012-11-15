@@ -1,7 +1,7 @@
 module ROSRS
 
   class Resource
-    attr_reader :uri, :proxy_uri, :name
+    attr_reader :research_object, :uri, :proxy_uri
 
     def initialize(research_object, uri, proxy_uri = nil, external = nil)
       @research_object = research_object
@@ -32,6 +32,7 @@ module ROSRS
     def delete
       code = @session.delete_resource(@proxy_uri)[0]
       @loaded = false
+      @research_object.remove_resource(self)
       code == 204
     end
 
@@ -43,17 +44,18 @@ module ROSRS
       @external
     end
 
-    def self.create_internal(research_object, name, body, content_type = 'text/plain')
-      code, reason, proxy_uri, resource_uri = research_object.session.aggregate_internal_resource(research_object.uri,
-                                                                                                 name,
-                                                                                                 :body => body,
-                                                                                                 :ctype => content_type)
-      self.new(research_object, resource_uri, proxy_uri, false)
-    end
+    def self.create(research_object, uri, body = nil, content_type = 'text/plain')
+      if body.nil?
+        code, reason, proxy_uri, resource_uri = research_object.session.aggregate_external_resource(research_object.uri, uri)
+        self.new(research_object, resource_uri, proxy_uri, true)
+      else
+        code, reason, proxy_uri, resource_uri = research_object.session.aggregate_internal_resource(research_object.uri,
+                                                                                                   uri,
+                                                                                                   :body => body,
+                                                                                                   :ctype => content_type)
+        self.new(research_object, resource_uri, proxy_uri, false)
+      end
 
-    def self.create_external(research_object, uri)
-      code, reason, proxy_uri, resource_uri = research_object.session.aggregate_external_resource(research_object.uri, uri)
-      self.new(research_object, resource_uri, proxy_uri, true)
     end
 
   end

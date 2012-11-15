@@ -1,10 +1,9 @@
 module ROSRS
 
   # A representation of a folder in a Research Object.
+  class Folder < Resource
 
-  class Folder
-
-    attr_reader :research_object, :name, :uri
+    attr_reader :name
 
     ##
     # +research_object+:: The Wf4Ever::ResearchObject that aggregates this folder.
@@ -12,17 +11,16 @@ module ROSRS
     # +uri+::             The URI for the resource referred to by the Folder.
     # +options+::         A hash of options:
     # [:eager_load]       Whether or not to eagerly load the entire Folder hierarchy within in this Folder.
-    def initialize(research_object, name, uri, options = {})
+    def initialize(research_object, uri, proxy_uri, name, options = {})
+      super(research_object, uri, proxy_uri)
       @name = name
-      @uri = uri
-      @research_object = research_object
       @session = research_object.session
       @loaded = false
       if options[:contents_graph]
         @contents = parse_folder_description(options[:contents_graph])
         @loaded = true
       end
-      @root_folder = options[:root_folder] || false
+      @root_folder = options[:root_folder]
       load if (@eager_load = options[:eager_load])
     end
 
@@ -64,16 +62,17 @@ module ROSRS
     def delete
       code = @session.delete_folder(@uri)[0]
       @loaded = false
+      @research_object.remove_folder(self)
       code == 204
     end
 
     ##
     # Add an entry to the folder. The resource must already be present in the RO.
     def add(resource, entry_name = nil)
-      if resource.is_a?(ROSRS::Resource)
+      if resource.instance_of?(ROSRS::Resource)
         contents << ROSRS::FolderEntry.create(self, entry_name, resource.uri)
       else
-        contents << ROSRS::FolderEntry.create(self, entry_name || resource.name, resource)
+        contents << ROSRS::FolderEntry.create(self, entry_name, resource)
       end
 
     end
@@ -88,22 +87,22 @@ module ROSRS
     ##
     # Create a folder in the RO and add it to this folder as a subfolder
     def create_folder(name)
+      raise("Untested")
       folder = @research_object.create_folder(name)
       add(folder.uri, name)
       folder
     end
 
     def self.create(ro, name, contents = [])
-      code, reason, uri, folder_description = ro.session.create_folder(ro.uri, name, contents)
-      self.new(ro, name, uri, :contents => folder_description)
+      code, reason, uri, proxy_uri, folder_description = ro.session.create_folder(ro.uri, name, contents)
+      self.new(ro, name, uri, proxy_uri, :contents_graph => folder_description)
     end
 
     private
 
     # Get folder contents from remote resource map file
     def fetch_folder_contents
-      code, reason, headers, uripath, graph = @session.do_request_rdf("GET", uri,
-                                                                      :accept => 'application/vnd.wf4ever.folder')
+      code, reason, headers, uripath, graph = @session.get_folder(uri)
       parse_folder_description(graph)
     end
 
@@ -111,21 +110,14 @@ module ROSRS
       contents = []
 
       query = RDF::Query.new do
-        pattern [:folder_entry, RDF.type,  RDF::RO.FolderEntry]
+        pattern [:folder_entry, RDF.type, RDF::RO.FolderEntry]
         pattern [:folder_entry, RDF::RO.entryName, :name]
         pattern [:folder_entry, RDF::ORE.proxyFor, :target]
-        # pattern [:target, RDF.type, RDF::RO.Resource]
-        # The pattern below is treated as mandatory - Bug in RDF library! :( Maybe not needed?
-        # pattern [:target, RDF::ORE.isDescribedBy, :target_resource_map], :optional => true
       end
 
       # Create instances for each item.
       graph.query(query).each do |result|
-      #  if result.respond_to? :target_resource_map
-      #    contents << ROSRS::Folder.new(@research_object, result.name.to_s, result.target.to_s, :eager_load => @eager_load)
-      #  else
-          contents << ROSRS::FolderEntry.new(self, result.name.to_s, result.folder_entry.to_s, result.target.to_s)
-      #  end
+        contents << ROSRS::FolderEntry.new(self, result.name.to_s, result.folder_entry.to_s, result.target.to_s)
       end
 
       contents
