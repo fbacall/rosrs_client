@@ -150,6 +150,33 @@ class TestAbstractInteraction < Test::Unit::TestCase
     assert_include(folder_resource_uris, internal.uri)
   end
 
+  def test_nesting_folders
+    root = @ro.create_folder("root")
+    assert_not_nil(@ro.root_folder)
+    assert_equal(1, @ro.folders.size)
+    # Create nested folder
+    level1 = root.create_folder("level1")
+    assert_equal(2, @ro.folders.size)
+    assert_equal(root.uri + "level1/", level1.uri)
+    assert_equal(1, root.contents.size)
+    entry = root.contents.first
+    assert_equal(entry.class, ROSRS::FolderEntry)
+    assert_equal(entry.resource.class, ROSRS::Folder)
+    assert_equal(entry.resource.uri, level1.uri)
+    # Reload and test again
+    @ro.load
+    assert_equal(2, @ro.folders.size)
+    folder_names = @ro.folders.collect {|f| f.name}
+    assert_includes(folder_names, "level1")
+    assert_includes(folder_names, "root")
+    assert_equal(root.uri, @ro.root_folder.uri)
+    assert_equal(1, root.contents.size)
+    entry = root.contents.first
+    assert_equal(entry.class, ROSRS::FolderEntry)
+    assert_equal(entry.resource.class, ROSRS::Folder)
+    assert_equal(entry.resource.uri, level1.uri)
+  end
+
   private
 
   def create_annotation_body(ro_uri, resource_uri)

@@ -7,13 +7,13 @@ module ROSRS
 
     ##
     # +research_object+:: The Wf4Ever::ResearchObject that aggregates this folder.
-    # +name+::            The display name of the Folder.
     # +uri+::             The URI for the resource referred to by the Folder.
     # +options+::         A hash of options:
-    # [:eager_load]       Whether or not to eagerly load the entire Folder hierarchy within in this Folder.
-    def initialize(research_object, uri, proxy_uri, name, options = {})
+    # [:contents_graph]   An RDFGraph of the folder contents, if on hand (to save having to make a request).
+    # [:root_folder]      A boolean flag to say if this folder is the root folder of the RO.
+    def initialize(research_object, uri, proxy_uri, options = {})
       super(research_object, uri, proxy_uri)
-      @name = name
+      @name = uri.to_s.split('/').last
       @session = research_object.session
       @loaded = false
       if options[:contents_graph]
@@ -21,7 +21,6 @@ module ROSRS
         @loaded = true
       end
       @root_folder = options[:root_folder]
-      load if (@eager_load = options[:eager_load])
     end
 
     ##
@@ -67,7 +66,7 @@ module ROSRS
     end
 
     ##
-    # Add an entry to the folder. The resource must already be present in the RO.
+    # Add an entry to the folder. +resource+ can be a ROSRS::Resource object or a URI
     def add(resource, entry_name = nil)
       if resource.instance_of?(ROSRS::Resource)
         contents << ROSRS::FolderEntry.create(self, entry_name, resource.uri)
@@ -87,15 +86,16 @@ module ROSRS
     ##
     # Create a folder in the RO and add it to this folder as a subfolder
     def create_folder(name)
-      raise("Untested")
-      folder = @research_object.create_folder(name)
+      # Makes folder name parent/child instead of just child
+      folder_name = (URI(uri) + URI(name) - URI(@research_object.uri)).to_s
+      folder = @research_object.create_folder(folder_name)
       add(folder.uri, name)
       folder
     end
 
     def self.create(ro, name, contents = [])
       code, reason, uri, proxy_uri, folder_description = ro.session.create_folder(ro.uri, name, contents)
-      self.new(ro, name, uri, proxy_uri, :contents_graph => folder_description)
+      self.new(ro, uri, proxy_uri, :contents_graph => folder_description)
     end
 
     private

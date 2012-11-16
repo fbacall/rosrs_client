@@ -181,13 +181,9 @@ module ROSRS
         pattern [:proxy_uri, RDF::ORE.proxyFor, :folder]
       end
 
-      result = @manifest.query(query).first
-      if result
+      @manifest.query(query).each do |result|
         folder_uri = result.folder.to_s
-        folder_name = folder_uri.to_s.split('/').last
-        folders[folder_uri] = ROSRS::Folder.new(self, folder_uri, result.proxy_uri.to_s, folder_name)
-      else
-        nil
+        folders[folder_uri] = ROSRS::Folder.new(self, folder_uri, result.proxy_uri.to_s)
       end
 
       @root_folder = folders[extract_root_folder]

@@ -563,8 +563,8 @@ module ROSRS
     ##
     # Returns [code, reason, headers, uri, folder_contents]
     def get_folder(folder_uri)
-      code, reason, headers, uri, folder_contents = @session.do_request_rdf("GET", folder_uri,
-                                                                            :accept => 'application/vnd.wf4ever.folder')
+      code, reason, headers, uri, folder_contents = do_request_rdf("GET", folder_uri,
+                                                                   :accept => 'application/vnd.wf4ever.folder')
       [code, reason, headers, uri, folder_contents]
     end
 
@@ -577,6 +577,7 @@ module ROSRS
     #
     # Returns [code, reason, uri, proxy_uri, folder_description_graph]
     def create_folder(ro_uri, name, contents = [])
+      name << "/" unless name[-1] == "/" # Need trailing slash on folders...
       code, reason, headers, uripath, folder_description = do_request_rdf("POST", ro_uri,
           :body       => create_folder_description(contents),
           :headers    => {"Slug" => name,
