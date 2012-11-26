@@ -565,6 +565,10 @@ module ROSRS
     def get_folder(folder_uri)
       code, reason, headers, uri, folder_contents = do_request_rdf("GET", folder_uri,
                                                                    :accept => 'application/vnd.wf4ever.folder')
+      if code != 200
+        error(code, reason)
+      end
+
       [code, reason, headers, uri, folder_contents]
     end
 
