@@ -11,7 +11,7 @@ module ROSRS
     # +options+::         A hash of options:
     # [:contents_graph]   An RDFGraph of the folder contents, if on hand (to save having to make a request).
     # [:root_folder]      A boolean flag to say if this folder is the root folder of the RO.
-    def initialize(research_object, uri, proxy_uri, options = {})
+    def initialize(research_object, uri, proxy_uri = nil, options = {})
       super(research_object, uri, proxy_uri)
       @name = uri.to_s.split('/').last
       @session = research_object.session

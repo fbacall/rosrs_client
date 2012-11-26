@@ -216,6 +216,8 @@ module ROSRS
         pattern [:resource, RDF.type, RDF::RO.Resource]
         #pattern [:resource, RDF::RO.name, :name]
         pattern [:proxy_uri, RDF::ORE.proxyFor, :resource]
+        pattern [:resource, RDF::DC.creator, :created_by]
+        pattern [:resource, RDF::DC.created, :created_at]
       end
 
       @manifest.query(query).each do |result|

@@ -22,7 +22,9 @@ module ROSRS
     ##
     # The resource which this annotation relates to
     def resource
-      @research_object.resources(resource_uri)
+      @resource ||= @research_object.resources(@resource_uri) ||
+                    @research_object.folders(@resource_uri) ||
+                    ROSRS::Resource.new(@research_object, @resource_uri)
     end
 
     def loaded?
@@ -30,7 +32,7 @@ module ROSRS
     end
 
     def load
-      c,r,u,@body = @session.get_annotation(body_uri || uri)
+      c,r,u,@body = @session.get_annotation(body_uri)
       @loaded = true
     end
 

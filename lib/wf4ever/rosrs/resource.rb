@@ -1,18 +1,15 @@
 module ROSRS
 
   class Resource
-    attr_reader :research_object, :uri, :proxy_uri
+    attr_reader :research_object, :uri, :proxy_uri, :created_at, :created_by
 
-    def initialize(research_object, uri, proxy_uri = nil, external = nil)
+    def initialize(research_object, uri, proxy_uri = nil, options = {})
       @research_object = research_object
       @uri = uri
       @proxy_uri = proxy_uri
       @session = @research_object.session
-      if external.nil?
-        @external = !@uri.include?(research_object.uri)
-      else
-        @external = external
-      end
+      @created_at = options[:created_at]
+      @created_by = options[:created_by]
     end
 
     ##
@@ -37,23 +34,23 @@ module ROSRS
     end
 
     def internal?
-      !@external
+      @uri.include?(@research_object.uri)
     end
 
     def external?
-      @external
+      !internal?
     end
 
     def self.create(research_object, uri, body = nil, content_type = 'text/plain')
       if body.nil?
         code, reason, proxy_uri, resource_uri = research_object.session.aggregate_external_resource(research_object.uri, uri)
-        self.new(research_object, resource_uri, proxy_uri, true)
+        self.new(research_object, resource_uri, proxy_uri)
       else
         code, reason, proxy_uri, resource_uri = research_object.session.aggregate_internal_resource(research_object.uri,
                                                                                                    uri,
                                                                                                    :body => body,
                                                                                                    :ctype => content_type)
-        self.new(research_object, resource_uri, proxy_uri, false)
+        self.new(research_object, resource_uri, proxy_uri)
       end
 
     end
