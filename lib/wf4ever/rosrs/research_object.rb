@@ -9,8 +9,8 @@ module ROSRS
       if URI(uri).relative?
         uri = (rosrs_session.uri + URI(uri)).to_s
       end
+      uri = uri + '/' unless uri.end_with?('/')
       @uri = uri
-      @uri << '/' unless uri[-1] == '/'
       @loaded = false
     end
 
